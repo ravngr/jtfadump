@@ -1,0 +1,228 @@
+import visa
+import util
+
+_debug = True
+
+def _cast_bool(c):
+	return '1' if c else '0'
+
+class BaseInstrument:
+	"""Parent class for instruments"""
+	def __init__(self, id):
+		self.dev = visa.instrument(id)
+
+	def reset(self):
+		self.dev.write("*RST")
+
+	def wait(self):
+		self.dev.ask("*OPC?")
+
+	def get_id(self):
+		return self.dev.ask("*IDN?")
+
+	def ask(self, cmd):
+		if _debug:
+			print self.dev.resource_name + " <> " + cmd
+
+		return self.dev.ask(cmd)
+
+	def write(self, cmd):
+		if _debug:
+			print self.dev.resource_name + " <- " + cmd
+
+		self.dev.write(cmd)
+
+class Counter(BaseInstrument):
+	"""Frequency counter"""
+	impedance = util.enum(FIFTY='50', HIGH='1E6')
+
+	def get_freq(self):
+		return self.ask(":READ?")
+
+	def set_meas_time(self, t):
+		self.write(":ACQ:APER " + t)
+
+	def set_z(self, impedance):
+		self.write(":INP:IMP " + impedance)
+
+class Scope(BaseInstrument):
+	"""Oscilloscope"""
+	channels = 4
+
+	_volt_step = [ 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1.0, 2.0, 5.0 ]
+
+	ch_couple = util.enum(AC='AC', DC='DC')
+	ch_impedance = util.enum(FIFTY='FIFT', HIGH='ONEM')
+	img_format = util.enum(BMP='BMP', BMP8='BMP8', PNG='PNG')
+	mode_aq = util.enum(NORMAL='NORM', AVERAGE='AVER', HIGHRES='HRES', PEAK='PEAK')
+	mode_run = util.enum(RUN='RUN', STOP='STOP', SINGLE='SING')
+	time_mode = util.enum(MAIN='MAIN', WINDOW='WIND', XY='XY', ROLL='ROLL')
+	time_ref = util.enum(LEFT='LEFT', CENTER='CENTER', RIGHT='RIGHT')
+	trigger_mode = util.enum(EDGE='EDGE', GLITCH='GLIT', PATTERN='PATT', TV='TV', DELAY='DEL', EBURST='EBUR', OR='OR', RUNT='RUNT', SHOLD='SHOL', TRANSITION='TRAN', SBUS_1='SBUS1', SBUS_2='SBUS2', USB='USB')
+	trigger_sweep = util.enum(AUTO='AUTO', NORMAL='NORMAL')
+	trigger_edge_source = util.enum(CHANNEL='CHAN', DIGITAL='DIG', EXTERNAL='EXT', LINE='LINE', WAVE_GEN='WGEN')
+	wave_source = util.enum(CHANNEL='CHAN', POD='POD', BUS='BUS', FUNCTION='FUNC', MATH='MATH', WAVE_MEM='WMEM', SBUS='SBUS')
+
+	# Setup
+	def setup_auto(self):
+		self.write(":AUT")
+
+	def setup_default():
+		self.reset()
+
+	# Acquisition mode
+	def set_aq_mode(self, mode, count=0):
+		self.write(":ACQ:TYPE " + mode)
+
+		if count > 0:
+			self.write(":ACQ:COUN " + str(count))
+
+	# Channel configuration
+	def set_ch_atten(self, channel, attenuation):
+		self.write(":CHAN" + str(channel) + ":PROB " + str(attenuation))
+
+	def set_ch_couple(self, channel, coupling):
+		self.write(":CHAN" + str(channel) + ":COUP " + coupling)
+
+	def set_ch_enable(self, channel, enabled=False):
+		if channel == 0:
+			for n in range(1, (self.channels + 1)):
+				self.write(":CHAN" + str(n) + ":DISP " + _cast_bool(enabled))
+		else:
+			self.write(":CHAN" + str(channel) + ":DISP " + _cast_bool(enabled))
+
+	def set_ch_label(self, channel, label):
+		self.write(":CHAN" + str(channel) + ":LAB " + str(label))
+
+	def set_ch_offset(self, channel, offset):
+		self.write(":CHAN" + str(channel) + ":OFFS " + str(offset))
+
+	def set_ch_scale(self, channel, scale):
+		self.write(":CHAN" + str(channel) + ":SCAL " + str(scale))
+
+	def set_ch_z(self, channel, impedance):
+		self.write(":CHAN" + str(channel) + ":IMP " + impedance)
+
+	# Start/stop/single
+	def set_run(self, mode):
+		self.write(":" + mode)
+
+	# System
+	def set_sys_locked(self, locked):
+		self.write(":SYST:LOCK " + _cast_bool(locked))
+
+	def sys_message(self, msg):
+		self.write(":SYST:DSP \"" + msg + "\"")
+
+	def sys_img(self, filename, format, setup, colour):
+		self.write("SAVE:FIL \"" + filename + "\"")
+		self.write("SAVE:IMAG:FACT " + _cast_bool(setup))
+		self.write("SAVE:IMAG:FORM " + format)
+		self.write("SAVE:IMAG:PAL " + ('COL' if colour else 'GRAY'))
+		self.write("SAVE:IMAG:INKS " + _cast_bool(not colour))
+		self.write("SAVE:IMAG:STAR")
+
+	# Timebase
+	def set_time_mode(self, mode):
+		self.write(":TIM:MODE " + mode)
+
+	def set_time_offset(self, t):
+		self.write(":TIM:POS " + str(t))
+
+	def set_time_reference(self, reference):
+		self.write(":TIM:SCAL " + reference)
+
+	def set_time_scale(self, t):
+		self.write(":TIM:SCAL " + str(t))
+
+	# Trigger
+	def set_trigger_holdoff(self, t):
+		self.write(":TRIG:HOLD " + str(t))
+
+	def set_trigger_mode(self, mode):
+		self.write(":TRIG:MODE " + mode)
+
+	def set_trigger_sweep(self, sweep):
+		self.write(":TRIG:SWE " + sweep)
+
+	def set_trigger_level(self, level):
+		self.write(":TRIG:EDGE:LEV " + str(level))
+
+	def set_trigger_level_auto(self):
+		self.write(":TRIG:LEV:ASET")
+
+	def set_trigger_source(self, source, channel=-1):
+		if channel >= 0:
+			self.write(":TRIG:EDGE:SOUR " + source + channel)
+		else:
+			self.write(":TRIG:EDGE:SOUR " + source)
+
+	def trigger(self):
+		self.write("*TRG")
+
+	# Waveform
+	def get_waveform(self, source, channel = -1, highres = False):
+		self.write(":WAV:FORM " + ('WORD' if highres else 'BYTE'))
+		self.write(":WAV:BYT LSBF")	# LSB first
+		self.write(":WAV:UNS 1")	# Unsigned
+		self.write(":WAV:POIN:MODE MAX")
+		self.write(":WAV:POIN MAX")
+
+		if channel >= 0:
+			self.write(":WAV:SOUR " + source + str(channel))
+		else:
+			self.write(":WAV:SOUR " + source)
+
+		format = self.ask(":WAV:PRE?").split(',')
+
+		if len(format) != 10:
+			return []
+
+		x_step = float(format[4])
+		x_origin = float(format[5])
+		x_ref = int(format[6])
+		y_step = float(format[7])
+		y_origin = float(format[8])
+		y_ref = int(format[9])
+
+		waveform = self.ask(":WAV:DATA?")
+
+		if waveform[0] != '#':
+			return []
+
+		wave_start = 2 + int(waveform[1])
+		wave_size = int(waveform[2:wave_start])
+
+		data = []
+
+		for n in range(0, wave_size):
+			m = ord(waveform[wave_start + n])
+			x = (n - x_ref) * x_step + x_origin
+			y = (m - y_ref) * y_step + y_origin
+
+			data.append((n, m, x, y))
+
+		return data
+
+	def get_waveform_smart(self, source, channel = -1, highres = False):
+		for v in self._volt_step:
+			self.set_ch_scale(channel, v)
+			data = self.get_waveform(source, channel, highres)
+
+			flag = True
+
+			for n in data:
+				if n[1] == 0 or (not highres and n[1] == 255) or (highres and n[1] == 65536):
+					flag = False
+					break
+
+			if flag:
+				break
+
+		return data
+
+class PowerSupply(BaseInstrument):
+	pass
+
+class SignalGenerator(BaseInstrument):
+	pass
