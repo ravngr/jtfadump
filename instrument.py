@@ -1,10 +1,12 @@
+import serial
+import struct
 import visa
 import util
 
 _debug = True
 
 def _cast_bool(c):
-	return '1' if c else '0'
+	return 'ON' if c else 'OFF'
 
 class BaseInstrument:
 	"""Parent class for instruments"""
@@ -193,10 +195,19 @@ class Scope(BaseInstrument):
 		wave_start = 2 + int(waveform[1])
 		wave_size = int(waveform[2:wave_start])
 
+		if highres:
+			wave_size /= 2
+
 		data = []
 
 		for n in range(0, wave_size):
-			m = ord(waveform[wave_start + n])
+			if highres:
+				s = wave_start + n * 2
+				m = struct.unpack('>H', waveform[s:s + 2])[0]
+			else:
+				s = wave_start + n
+				m = struct.unpack('>B', waveform[s])[0]
+
 			x = (n - x_ref) * x_step + x_origin
 			y = (m - y_ref) * y_step + y_origin
 
@@ -222,7 +233,68 @@ class Scope(BaseInstrument):
 		return data
 
 class PowerSupply(BaseInstrument):
-	pass
+	def __init__(self, id):
+		super(PowerSupply, self).__init__(id)
+
+		self.dev.term_chars = '\r'
+		self.write("*ARD 1")
+
+	def get_voltage(self):
+		return self.ask(":MEAS?")
+
+	def get_current(self):
+		return self.ask(":MEAS:CURR?")
+
+	def get_power(self):
+		return self.get_voltage() * self.get_power()
+
+	def set_voltage(self, voltage):
+		self.write(":VOLT " + str(voltage))
+
+	def set_current(self, current):
+		self.write(":CURR " + str(current))
+
+	def set_output(self, enabled):
+		self.write(":OUTP " + _cast_bool(enabled))
 
 class SignalGenerator(BaseInstrument):
-	pass
+	pulsemod_source = util.enum(INT_10M='INT1', INT_40M='INT2', EXT_FRONT='EXT1', EXT_BACK='EXT2')
+
+	def set_output(self, enabled):
+		self.dev.write(":OUTP:STAT " + _cast_bool(enabled))
+
+	def set_output_frequency(self, frequency):
+		self.dev.write(":FREQ:MODE CW")
+		self.dev.write(":FREQ " + str(frequency))
+
+	def set_output_power(self, power):
+		self.dev.write(":POW " + str(power) + "dBm")
+
+	def set_pulsemod(self, enabled):
+		self.dev.write(":PULM:STAT " + _cast_bool(enabled))
+
+	def set_pulsemod_source(self, source):
+		self.dev.write(":PULM:SOUR " + source)
+
+	def set_pulsemod_count(self, count):
+		self.dev.write(":PULM:COUN " + str(count))
+
+	def set_pulsemod_period(self, t):
+		self.dev.write(":PULS:PER " + str(t))
+
+	def set_pulsemod_width(self, n, t):
+		self.dev.write(":PULS:WIDT" + n + " " + str(t))
+
+	def set_pulsemod_delay(self, n, t):
+		self.dev.write(":PULS:DEL" + n + " " + str(t))
+
+
+class TemperatureLogger:
+	def __init__(self, port):
+		self.port = serial.Serial(port, 9600, timeout=1)
+
+	def get_temperature(self, channel=0):
+		self.port.write('A')
+		self.port.flush()
+		r = self.port.read(45)
+		return (struct.unpack('>h', r[7+channel:9+channel])[0]) / 10.0
