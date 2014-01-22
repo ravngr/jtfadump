@@ -293,7 +293,7 @@ class TemperatureLogger:
 	def __init__(self, port):
 		self.port = serial.Serial(port, 9600, timeout=1)
 
-	def get_temperature(self, channel=0):
+	def get_temp(self, channel=0):
 		self.port.write('A')
 		self.port.flush()
 		r = self.port.read(45)
