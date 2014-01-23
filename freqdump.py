@@ -1,6 +1,4 @@
 import instrument
-import serial
-#import serial.tools
 import sys
 import time
 import visa
@@ -19,11 +17,6 @@ def main():
             sys.stderr.write(i + '\n')
 
         sys.stderr.flush()
-
-        #print "\nAvailable serial ports:"
-
-        #for i in serial.tools.list_ports.comports():
-        #    print i
 
         exit(0)
 

@@ -1,3 +1,4 @@
+import math
 import serial
 import struct
 import visa
@@ -223,6 +224,7 @@ class Scope(BaseInstrument):
 			flag = True
 
 			for n in data:
+				# Check data bounds, discard and switch ranges if clipping has occurred
 				if n[1] == 0 or (not highres and n[1] == 255) or (highres and n[1] == 65536):
 					flag = False
 					break
@@ -231,6 +233,37 @@ class Scope(BaseInstrument):
 				break
 
 		return data
+
+	def get_waveform_smart_multichannel(self, channels, highres = False):
+		# Make a copy of the channel list so we can edit it
+		channels = list(channels)
+
+		return_data = []
+
+		for v in self._volt_step:
+			# Set voltage on all active channels
+			for n in channels:
+				self.set_ch_scale(n, v)
+
+			# Dump data on all active channels
+			for n in channels:
+				data = self.get_waveform(self.wave_source.CHANNEL, n, highres)
+
+				flag = True
+
+				for i, n in enumerate(data):
+					if n[1] == 0 or (not highres and n[1] == 255) or (highres and n[1] == 65536):
+						flag = False
+						break
+
+				if flag:
+					del channels[i]
+					return_data.append(data)
+
+			if len(channels) == 0:
+				break
+
+		return return_data
 
 class PowerSupply(BaseInstrument):
 	def __init__(self, id):
@@ -261,33 +294,57 @@ class SignalGenerator(BaseInstrument):
 	pulsemod_source = util.enum(INT_10M='INT1', INT_40M='INT2', EXT_FRONT='EXT1', EXT_BACK='EXT2')
 
 	def set_output(self, enabled):
-		self.dev.write(":OUTP:STAT " + _cast_bool(enabled))
+		self.write(":OUTP:STAT " + _cast_bool(enabled))
 
 	def set_output_frequency(self, frequency):
-		self.dev.write(":FREQ:MODE CW")
-		self.dev.write(":FREQ " + str(frequency))
+		self.write(":FREQ:MODE CW")
+		self.write(":FREQ " + str(frequency))
 
 	def set_output_power(self, power):
-		self.dev.write(":POW " + str(power) + "dBm")
+		self.write(":POW " + str(power) + "dBm")
 
 	def set_pulsemod(self, enabled):
-		self.dev.write(":PULM:STAT " + _cast_bool(enabled))
+		self.write(":PULM:STAT " + _cast_bool(enabled))
 
 	def set_pulsemod_source(self, source):
-		self.dev.write(":PULM:SOUR " + source)
+		self.write(":PULM:SOUR " + source)
 
 	def set_pulsemod_count(self, count):
-		self.dev.write(":PULM:COUN " + str(count))
+		self.write(":PULM:COUN " + str(count))
 
 	def set_pulsemod_period(self, t):
-		self.dev.write(":PULS:PER " + str(t))
+		self.write(":PULS:PER " + str(t))
 
 	def set_pulsemod_width(self, n, t):
-		self.dev.write(":PULS:WIDT" + n + " " + str(t))
+		self.write(":PULS:WIDT" + n + " " + str(t))
 
 	def set_pulsemod_delay(self, n, t):
-		self.dev.write(":PULS:DEL" + n + " " + str(t))
+		self.write(":PULS:DEL" + n + " " + str(t))
 
+class VNA(BaseInstrument):
+	def file_read(self, path):
+		data = self.ask(":MMEM:TRAN " + path + "?")
+
+		if data[0] != '#':
+			return ''
+
+		data_start = 2 + int(data[1])
+		data_size = int(data[2:data_start])
+
+		return data[data_start:]
+
+	def file_write(self, path, data):
+		size = len(data)
+		prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
+		self.write(":MMEM:TRAN " + path + "," + prefix + data)
+
+	def save_s2p(self, path):
+		self.write(":MMEM:STOR:SNP:TYPE:S1P 1")
+		self.write(":MMEM:STOR:SNP:TYPE:S2P 1,2")
+		self.write(":MMEM:STOR:SNP " + path)
+
+	def set_state(self, path):
+		self.write(":MMEM:LOAD " + path)
 
 class TemperatureLogger:
 	def __init__(self, port):
