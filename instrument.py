@@ -1,6 +1,7 @@
 import math
 import serial
 import struct
+import time
 import visa
 import util
 
@@ -40,10 +41,10 @@ class Counter(BaseInstrument):
 	impedance = util.enum(FIFTY='50', HIGH='1E6')
 
 	def get_freq(self):
-		return self.ask(":READ?")
+		return float(self.ask(":READ?"))
 
 	def set_meas_time(self, t):
-		self.write(":ACQ:APER " + t)
+		self.write(":ACQ:APER " + str(t))
 
 	def set_z(self, impedance):
 		self.write(":INP:IMP " + impedance)
@@ -148,13 +149,13 @@ class Scope(BaseInstrument):
 	def set_trigger_sweep(self, sweep):
 		self.write(":TRIG:SWE " + sweep)
 
-	def set_trigger_level(self, level):
+	def set_trigger_edge_level(self, level):
 		self.write(":TRIG:EDGE:LEV " + str(level))
 
-	def set_trigger_level_auto(self):
+	def set_trigger_edge_level_auto(self):
 		self.write(":TRIG:LEV:ASET")
 
-	def set_trigger_source(self, source, channel=-1):
+	def set_trigger_edge_source(self, source, channel=-1):
 		if channel >= 0:
 			self.write(":TRIG:EDGE:SOUR " + source + channel)
 		else:
@@ -162,6 +163,23 @@ class Scope(BaseInstrument):
 
 	def trigger(self):
 		self.write("*TRG")
+
+	def single_trigger(self, timeout = 0, interval = 0.1):
+		self.write("STOP")
+		self.write(":TER?")
+		self.write(":SING")
+
+		t = 0
+
+		while timeout == 0 or t <= timeout:
+			trigger = self.ask(":TER?")
+
+			if len(trigger) > 0 and trigger[1] == '1':
+				return True
+
+			time.sleep(interval)
+
+		return False
 
 	# Waveform
 	def get_waveform(self, source, channel = -1, highres = False):
@@ -246,12 +264,12 @@ class Scope(BaseInstrument):
 				self.set_ch_scale(n, v)
 
 			# Dump data on all active channels
-			for n in channels:
+			for i, n in enumerate(channels):
 				data = self.get_waveform(self.wave_source.CHANNEL, n, highres)
 
 				flag = True
 
-				for i, n in enumerate(data):
+				for n in data:
 					if n[1] == 0 or (not highres and n[1] == 255) or (highres and n[1] == 65536):
 						flag = False
 						break
@@ -267,7 +285,7 @@ class Scope(BaseInstrument):
 
 class PowerSupply(BaseInstrument):
 	def __init__(self, id):
-		super(PowerSupply, self).__init__(id)
+		BaseInstrument.__init__(self, id)
 
 		self.dev.term_chars = '\r'
 		self.write("*ARD 1")

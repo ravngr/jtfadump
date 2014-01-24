@@ -31,16 +31,20 @@ def main():
     counter = instrument.Counter(sys.argv[2])
     temp = instrument.TemperatureLogger(sys.argv[3])
 
+    counter.reset()
+    counter.set_z(counter.impedance.FIFTY)
+    counter.set_meas_time(200e-3)
+
     while True:
         t = time.time()
         f = counter.get_freq()
 
-        sys.stdout.write(str(t) + ", " + str(f))
+        sys.stdout.write(str(t))
 
         for i in channels:
-            sys.stdout.write(", " + str(temp.get_temp(i)))
+            sys.stdout.write(', ' + str(temp.get_temp(i)))
 
-        sys.stdout.write('\n')
+        sys.stdout.write(', ' + str(f) + '\n')
 
         sys.stdout.flush()
 
