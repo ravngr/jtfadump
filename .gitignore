@@ -1,2 +1,4 @@
 *.pyc
 twitter.json
+
+*.csv

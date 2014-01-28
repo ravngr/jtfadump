@@ -288,7 +288,11 @@ class PowerSupply(BaseInstrument):
 		BaseInstrument.__init__(self, id)
 
 		self.dev.term_chars = '\r'
-		self.write("*ARD 1")
+		self.write("*ADR 1")
+
+	def reset(self):
+		PowerSupply.reset(self)
+		self.write("*ADR 1")
 
 	def get_voltage(self):
 		return self.ask(":MEAS?")
