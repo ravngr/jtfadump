@@ -110,7 +110,7 @@ def main():
         result['capture_time'] = time.time() - result['time']
 
         # Save result to matlab file
-        filename = os.path.join(os.path.dirname(args.file.name), 'dump_%s_%06d.mat' % {time.strftime('YmdHMS'), n})
+        filename = os.path.join(os.path.dirname(args.result), 'dump_%s_%06d.mat' % {time.strftime('YmdHMS'), n})
         sio.savemat(filename, result)
         print 'Wrote \'' + filename + '\''
 

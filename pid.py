@@ -37,6 +37,7 @@ class PID:
 
         # Setup internal variables
         output(start)
+        self._output_value = limit.clamp(start)
         self._i = limit.clamp(start)
         self._last_in = input()
 
@@ -80,29 +81,40 @@ class PID:
     def get_sample_time(self):
         return self._sample_time
 
+    def get_output_value(self):
+        return self._output_value
+
     def start(self):
-        self._thread.start()
         self._running = True
+        self._thread.start()
 
     def stop(self):
         self._running = False
         self._thread.join()
 
     def _update(self):
-        while self._running:
-            t = time.time()
+        try:
+            while True:
+                t = time.time()
 
-            v = self._input()
-            err = self._target - v
+                v = self._input()
+                err = self._target - v
 
-            self._i += self._limit.clamp(self._Ki * err)
-            dv = self._last_in - v
+                self._i += self._limit.clamp(self._Ki * err)
+                dv = self._last_in - v
 
-            self._output(self._limit.clamp(self._Kp * err + self._i - self._Kd * dv))
+                self._output_value = self._limit.clamp(self._Kp * err + self._i - self._Kd * dv)
+                self._output(self._output_value)
 
-            self._last_in = v
+                self._last_in = v
 
-            st = self._sample_time - (time.time() - t)
+                st = self._sample_time - (time.time() - t)
 
-            if st > 0:
-                time.sleep(st)
+                if st > 0:
+                    time.sleep(st)
+
+                if not self._running:
+                    break
+        except():
+            # Set output to zero on exception
+            self._output(self._limit.clamp(0))

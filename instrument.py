@@ -291,7 +291,7 @@ class PowerSupply(BaseInstrument):
 		self.write("*ADR 1")
 
 	def reset(self):
-		PowerSupply.reset(self)
+		self.write("*RST")
 		self.write("*ADR 1")
 
 	def get_voltage(self):
