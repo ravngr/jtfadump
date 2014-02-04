@@ -31,20 +31,20 @@ def main():
     # Configuration
     tMax = 100.0
     tMin = 30.0
-    tStep = 5
+    tStep = 2
 
     chTAmbient = 0
     chTSubstrate = 2
 
-    stepInterval = 1200 # 20 minutes
+    stepInterval = 300 # 5 minutes
     interval = 5
 
-    Kp = 0.5
+    Kp = 1
     Ki = 0.01
     Kd = 0.5
 
     # Voltage output limit
-    pidVoltLimit = pid.Limit(0, 9)
+    pidVoltLimit = pid.Limit(0, 10)
 
     # Twitter authentication (omitted from git repository)
     f = open('twitter.json', 'r')
@@ -56,7 +56,6 @@ def main():
     temp = instrument.TemperatureLogger("COM3")
     tempLock = threading.Semaphore()
     count = instrument.Counter("GPIB0::10::INSTR")
-
 
     print psu.get_id()
     print count.get_id()
@@ -122,7 +121,7 @@ def main():
                 tempLock.release()
 
                 if t2 > trMax:
-                        trMax = t2
+                    trMax = t2
 
                 log.write(', ' + str(t1))
                 log.write(', ' + str(t2))
@@ -134,7 +133,7 @@ def main():
 
                 deltat = time.time() - t
 
-                print('LOOP: n=%d, v=%.1f, dT=%.1f, t1=%.1f, t2=%.1f, f=%.1f' % (n, volt, dT, t1, t2, f))
+                print('LOOP: n=%d, T=%.1f, v=%.2f, dT=%.1f, t1=%.1f, t2=%.1f, tM=%.1f, f=%.1f' % (n, target_temp, volt, dT, t1, t2, trMax, f))
 
                 if deltat < interval:
                     time.sleep(interval - deltat)
@@ -150,7 +149,12 @@ def main():
 
             # Log result
             print 'Cycle ' + str(n) + ' done!'
-            stat.send('LOOP: n=%d, v=%.1f, dT=%.1f, t1=%.1f, t2=%.1f, f=%.1f' % (n, volt, dT, t1, t2, f))
+            
+            #try:
+            #    stat.send('LOOP: n=%d, T=%.1f, v=%.2f, dT=%.1f, t1=%.1f, t2=%.1f, tM=%.1f, f=%.1f' % (n, target_temp, volt, dT, t1, t2, trMax, f))
+            #except:
+            #    print 'Message failed!'
+            #    pass
 
             target_temp += dT
             n += 1
