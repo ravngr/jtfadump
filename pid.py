@@ -84,6 +84,9 @@ class PID:
     def get_output_value(self):
         return self._output_value
 
+    def is_running(self):
+        return self._thread.is_alive()
+
     def start(self):
         self._running = True
         self._thread.start()

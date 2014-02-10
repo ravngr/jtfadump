@@ -149,7 +149,7 @@ def main():
 
             # Log result
             print 'Cycle ' + str(n) + ' done!'
-            
+
             #try:
             #    stat.send('LOOP: n=%d, T=%.1f, v=%.2f, dT=%.1f, t1=%.1f, t2=%.1f, tM=%.1f, f=%.1f' % (n, target_temp, volt, dT, t1, t2, trMax, f))
             #except:
