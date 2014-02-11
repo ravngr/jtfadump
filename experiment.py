@@ -160,7 +160,7 @@ class JTFA(Experiment):
 
     def run(self, cfg, resultPath, meas, endTime):
         # Sleep to next window (because of instability caused by temperature change)
-        #time.sleep(self._interval)
+        time.sleep(self._interval)
 
         result = {}
 
@@ -212,7 +212,7 @@ class JTFA(Experiment):
 
         self._log.info('Result: ' + resultFile)
 
-        time.sleep(self._interval)
+        #time.sleep(self._interval)
 
     def close(self):
         pass

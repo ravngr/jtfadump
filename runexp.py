@@ -110,19 +110,19 @@ def main():
     tempFilePath = os.path.join(logPath, 'temp_%s.csv' % (timestr))
     tempFile = open(tempFilePath, 'w')
 
-    #psu = instrument.PowerSupply(idPSU)
+    psu = instrument.PowerSupply(idPSU)
     tempLog = instrument.TemperatureLogger(idTemp)
-    #logging.info('Power Supply: ' + psu.get_id())
+    logging.info('Power Supply: ' + psu.get_id())
 
     # Wait for PSU
     time.sleep(0.2)
-    #psu.reset()
+    psu.reset()
     time.sleep(0.2)
-    #psu.set_voltage(0.0)
+    psu.set_voltage(0.0)
     time.sleep(0.2)
-    #psu.set_current(14.0)
+    psu.set_current(14.0)
     time.sleep(0.2)
-    #psu.set_output(True)
+    psu.set_output(True)
 
     def get_temp():
         global meas
@@ -131,12 +131,13 @@ def main():
         meas.tSub = tempLog.get_temp(2)
 
         tempFile.write('%.3f, %.2f, %.1f, %.1f\n' % (t, meas.volt, meas.tAmb, meas.tSub))
+        tempFile.flush()
         return meas.tSub
 
     def set_voltage(v):
         global meas
         meas.volt = v
-        #psu.set_voltage(v)
+        psu.set_voltage(v)
 
     tempCtrlInterval = 3 # Not really worth going faster since temperature probe is slow
     tempCtrlLimit = pid.Limit(0, vMax)
@@ -145,7 +146,7 @@ def main():
     try:
         with open('tempTarget.pickle') as f:
             tempTarget, dT = pickle.load(f)
-        logging.warning('Resuming temperature from %.2f with tStep = %.2f' % (tempTarget, dT))
+        logging.warning('Resuming temperature = %.2f with tStep = %.2f' % (tempTarget, dT))
     except:
         tempTarget = tMin
         dT = tStep
@@ -174,7 +175,7 @@ def main():
             startTime = time.time()
             nextTime = startTime + tInterval
 
-            logging.info('Loop %d @ %.2f: %s, Next step: %s' % (loop, tempTarget, str(time.strftime('%Y%m%d %H:%M:%S')), str(time.strftime('%Y%m%d %H:%M:%S', time.localtime(nextTime)))))
+            logging.info('Loop %d @ %.2f (%.2f)' % (loop, tempTarget, dT))
 
             meas.target = tempTarget
 
