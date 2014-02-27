@@ -20,13 +20,13 @@ class BaseInstrument:
         self._dev = visa.instrument(id)
 
     def reset(self):
-        self._dev.write("*RST")
+        self._dev.write('*RST')
 
     def wait(self):
-        self._dev.ask("*OPC?")
+        self._dev.ask('*OPC?')
 
     def get_id(self):
-        return self.ask("*IDN?")
+        return self.ask('*IDN?')
 
     def ask(self, cmd):
         response = self._dev.ask(cmd)
@@ -42,19 +42,19 @@ class Counter(BaseInstrument):
     impedance = util.enum(FIFTY='50', HIGH='1E6')
 
     def get_freq(self):
-        return float(self.ask(":READ?"))
+        return float(self.ask(':READ?'))
 
     def set_meas_time(self, t):
-        self.write(":ACQ:APER " + str(t))
+        self.write(':ACQ:APER %f' % (t))
 
     def set_z(self, impedance):
-        self.write(":INP:IMP " + impedance)
+        self.write(':INP:IMP %s' % (impedance))
 
 class Scope(BaseInstrument):
     """Oscilloscope"""
     channels = 4
 
-    _volt_step = [ 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1.0, 2.0, 5.0 ]
+    _volt_step = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1.0, 2.0, 5.0 ]
 
     ch_couple = util.enum(AC='AC', DC='DC')
     ch_impedance = util.enum(FIFTY='FIFT', HIGH='ONEM')
@@ -192,7 +192,7 @@ class Scope(BaseInstrument):
     def trigger(self):
         self.write("*TRG")
 
-    def single_trigger(self, timeout = 0, interval = 0.1):
+    def trigger_single(self, timeout = 0, interval = 0.1):
         self.write(":STOP")
         self.ask(":TER?")
         self.write(":SING")
@@ -211,7 +211,27 @@ class Scope(BaseInstrument):
 
             t += interval
 
-        return False
+        raise Exception('Scope trigger timeout')
+
+    def trigger_window(self, window, timeout = 0):
+        self.write(":STOP")
+        self.ask(":TER?")
+
+        t = 0
+
+        while timeout == 0 or t <= timeout:
+            self.write(":RUN")
+            time.sleep(window)
+            self.write(":STOP")
+
+            trigger = self.ask(":TER?")
+
+            if len(trigger) > 0 and trigger[1] == '1':
+                return True
+
+            t += window
+
+        raise Exception('Scope trigger timeout')
 
     def get_waveform_init(self, highres = False):
         self._highres = highres
@@ -224,8 +244,8 @@ class Scope(BaseInstrument):
 
     # Waveform
     def get_waveform(self, source, channel = -1, trigger=True, timeout=5):
-        if trigger and not self.single_trigger(timeout):
-            raise Exception('Waveform capture timeout')
+        if trigger:
+            self.trigger_single(timeout)
 
         if channel >= 0:
             self.write(":WAV:SOUR " + source + str(channel))
@@ -381,7 +401,7 @@ class Scope(BaseInstrument):
         self.get_waveform_init(False)
         self._channel_v_cache = [0] * self.channels
 
-    def get_waveform_smart_multichannel_fast(self, channels):
+    def get_waveform_smart_multichannel_fast(self, channels, timeout = 5.0, process = True):
         flags = [True] * len(channels)
         return_data = [0] * len(channels)
         v = self._channel_v_cache
@@ -394,12 +414,12 @@ class Scope(BaseInstrument):
             for tup in active_channels:
                 n = tup[1] - 1  # Channel index (for v cache)
                 ch = tup[1]     # Channel number
+
                 # Set channel(s) volts per division
                 self.set_ch_scale(ch, self._volt_step[v[n]])
 
             # Trigger scope
-            if not self.single_trigger(timeout=5):
-                raise Exception('Scope trigger timeout')
+            self.trigger_single(timeout)
 
             # Dump data from active channels
             for tup in active_channels:
@@ -410,32 +430,37 @@ class Scope(BaseInstrument):
                 data = self.get_waveform_raw(self.wave_source.CHANNEL, ch)
                 raw_data = [x[1] for x in data]
 
-                if 0 in raw_data or 255 in raw_data:
+                #if 0 in raw_data or 1 in raw_data or 255 in raw_data:
+                if any(i in raw_data for i in (0, 1, 255)):
                     # Over threshold, if previous data exists then return it, else change ranges
                     if type(return_data[i]) == list:
-                        #print 'OK %d' % ch
                         flags[i] = False
+
+                        # Reset volts setting to correct one
+                        self.set_ch_scale(ch, self._volt_step[self._channel_v_cache[n]])
                     elif (v[n] + 1) >= len(self._volt_step):
-                            return_data[i] = self.get_waveform_raw_process(data)
+                            return_data[i] = self.get_waveform_raw_process(data) if process else data
                             self._channel_v_cache[n] = v[n]
                             flags[i] = False
-                            #print 'UB %d' % ch
                     else:
-                        #print 'V+ %d' % ch
                         v[n] += 1
                 else:
-                    # Data is good, try again going down a range unless we know that's bad
-                    return_data[i] = self.get_waveform_raw_process(data)
+                    # Data is good
+                    return_data[i] = self.get_waveform_raw_process(data) if process else data
                     self._channel_v_cache[n] = v[n]
-                    #print 'Store: %d = %f' %(ch, self._volt_step[v[n]])
 
-                    # Check for lower bound
+                    # Check for lower bound, also exit if the previous data was bad (this is the first good step)
                     if v[n] == 0 or loop > 0:
-                        #print 'LB %d' % ch
                         flags[i] = False
                     else:
-                        #print 'V- %d' % ch
-                        v[n] -= 1
+                        # If the maximum of the data is less than the next step down then we can step down to increase resolution
+                        f = max((abs(x) for x in raw_data)) - 128 + 2
+                        f *= self._volt_step[v[n]] / self._volt_step[v[n] - 1]
+
+                        if f > 127 or f < -127:
+                            flags[i] = False
+                        else:
+                            v[n] -= 1
 
             loop += 1
 

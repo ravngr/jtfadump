@@ -28,7 +28,7 @@ def main():
     Kp = 1.0
     Ki = 0.05
     Kd = 0.5
-    target = 55.0
+    target = 30.0
     interval = 3.0
 
     p = pid.PID(get_temp, set_volt, 0, target, pid.Limit(0, 5), Kp, Ki, Kd, interval)

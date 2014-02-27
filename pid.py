@@ -27,13 +27,15 @@ class PID:
 
         self._limit = limit
 
-        self._Kp = Kp
-        self._Ki = Ki
-        self._Kd = Kd
-
+        #self._Kp = Kp
+        #self._Ki = Ki
+        #self._Kd = Kd
+        
         self._sample_time = t
-
+        
         self._invert = invert
+        
+        self.set_tuning(Kp, Ki, Kd)
 
         # Setup internal variables
         output(start)

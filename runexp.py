@@ -33,8 +33,9 @@ def main():
     parser.add_argument('config', help='Experiment configuration file(s)', nargs='+')
 
     parser.add_argument('-v', help='Verbose output', dest='verbose', action='store_true')
+    parser.add_argument('--no-temp', help='Run without controlling the device temperature', dest='notemp', action='store_true')
     parser.set_defaults(verbose=False)
-    parser.set_defaults(visa=False)
+    parser.set_defaults(notemp=False)
 
     args = parser.parse_args()
 
@@ -110,34 +111,50 @@ def main():
     tempFilePath = os.path.join(logPath, 'temp_%s.csv' % (timestr))
     tempFile = open(tempFilePath, 'w')
 
-    psu = instrument.PowerSupply(idPSU)
-    tempLog = instrument.TemperatureLogger(idTemp)
-    logging.info('Power Supply: ' + psu.get_id())
-
     # Wait for PSU
-    time.sleep(0.2)
-    psu.reset()
-    time.sleep(0.2)
-    psu.set_voltage(0.0)
-    time.sleep(0.2)
-    psu.set_current(14.0)
-    time.sleep(0.2)
-    psu.set_output(True)
+    tempLog = instrument.TemperatureLogger(idTemp)
+
+    if not args.notemp:
+        psu = instrument.PowerSupply(idPSU)
+        time.sleep(0.2)
+
+        logging.info('Power Supply: ' + psu.get_id())
+
+        time.sleep(0.2)
+        psu.reset()
+        time.sleep(0.2)
+        psu.set_voltage(0.0)
+        time.sleep(0.2)
+        psu.set_current(14.0)
+        time.sleep(0.2)
+        psu.set_output(True)
+    else:
+        logging.warning('Running without temperature control')
 
     def get_temp():
         global meas
-        t = time.time()
-        meas.tAmb = tempLog.get_temp(0)
-        meas.tSub = tempLog.get_temp(2)
 
-        tempFile.write('%.3f, %.2f, %.1f, %.1f\n' % (t, meas.volt, meas.tAmb, meas.tSub))
-        tempFile.flush()
+        try:
+            t = time.time()
+            meas.tAmb = tempLog.get_temp(0)
+            meas.tSub = tempLog.get_temp(2)
+
+            tempFile.write('%.3f, %.2f, %.1f, %.1f\n' % (t, meas.volt, meas.tAmb, meas.tSub))
+            tempFile.flush()
+        except:
+            logging.warning('Failed to read temperature!')
+
         return meas.tSub
 
-    def set_voltage(v):
+    def set_voltage_real(v):
         global meas
         meas.volt = v
         psu.set_voltage(v)
+
+    def set_voltage_dummy(v):
+        pass
+
+    set_voltage = set_voltage_dummy if args.notemp else set_voltage_real
 
     tempCtrlInterval = 3 # Not really worth going faster since temperature probe is slow
     tempCtrlLimit = pid.Limit(0, vMax)
