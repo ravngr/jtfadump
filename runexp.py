@@ -3,6 +3,8 @@ import ConfigParser
 import logging
 import os
 import pickle
+import random
+import string
 import time
 
 import instrument
@@ -53,6 +55,7 @@ def main():
     tStep = cfg.getfloat('param', 'tStep')
     vMax = cfg.getfloat('param', 'vMax')
     tInterval = cfg.getfloat('param', 'tInterval')
+    runs = cfg.getint('param', 'runs')
 
     # Temperature controller
     Kp = cfg.getfloat('pid', 'Kp')
@@ -181,6 +184,9 @@ def main():
 
     try:
         while True:
+            # Generate an ID for this loop
+            uid = ''.join(random.choice(string.hexdigits[:16]) for x in range(8))
+
             # Check for operational PID loop
             if not tempCtrl.is_running():
                 raise SystemError()
@@ -192,14 +198,26 @@ def main():
             startTime = time.time()
             nextTime = startTime + tInterval
 
-            logging.info('Loop %d @ %.2f (%.2f)' % (loop, tempTarget, dT))
+            logging.info('Loop %s %d @ %.2f (%.2f)' % (uid, loop, tempTarget, dT))
 
             meas.target = tempTarget
 
             tempCtrl.set_target(tempTarget)
 
             # Do Science!
-            exp.run(cfg, resultPath, meas, nextTime)
+            fail = 0
+            fail_threshold = 3
+
+            for n in range(0, runs):
+                try:
+                    exp.run(cfg, resultPath, meas, nextTime, tempTarget, uid, n)
+                except:
+                    fail += 1
+
+                    if fail > fail_threshold:
+                        raise
+                    else:
+                        logging.warning('Capture failed! Failure %d of %d allowed' % (fail, fail_threshold))
 
             # Alter output voltage according to state (up/down)
             if tempTarget <= tMin:

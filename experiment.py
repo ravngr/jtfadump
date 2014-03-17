@@ -13,7 +13,7 @@ class Experiment():
     def setup(self, cfg, resultPath, timestr):
         print 'Setup'
 
-    def run(self, cfg, resultPath, meas, endTime):
+    def run(self, cfg, resultPath, meas, endTime, target, uid, n):
         while time.time() < endTime:
             print 'Run'
             time.sleep(1)
@@ -41,7 +41,7 @@ class Loop(Experiment):
         self._file = open(filename, 'a')
         self._log.info('Loop file: ' + filename)
 
-    def run(self, cfg, resultPath, meas, endTime):
+    def run(self, cfg, resultPath, meas, endTime, target, uid, n):
         n = 0
 
         while time.time() < endTime:
@@ -163,15 +163,19 @@ class JTFA(Experiment):
 
         self._log.info('JTFA directory: ' + self._result_path)
 
-    def run(self, cfg, resultPath, meas, endTime):
+    def run(self, cfg, resultPath, meas, endTime, target, uid, iter):
         # Sleep to next window (because of instability caused by temperature change)
-        time.sleep(self._interval)
+        if iter == 0:
+            time.sleep(self._interval)
 
         result = {}
 
+        result['uid'] = uid
+        result['iteration'] = iter
         result['capture_start'] = time.time()
         result['capture_time'] = 0
         result['volt'] = []
+        result['target'] = target
         result['temp_amb'] = []
         result['temp_sub'] = []
         result['freq'] = self._freq
@@ -193,35 +197,35 @@ class JTFA(Experiment):
             # Range scope
             #self._scope.set_aq_mode(self._scope.mode_aq.NORMAL)
 
-            fail = 0
-            n_cycles = 16
-            cycles = range(0, n_cycles)
-
-            in_d = []
-            out_d = []
-
-            for r in cycles:
-                try:
-                    d = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
-                except:
-                    self._log.warn('Failed to get data from scope (%d/%d)!' % (r + 1, cycles))
-
-                    fail += 1
-
-                    if fail > (n_cycles / 2):
-                        raise Exception('Too many scope failures in averaging cycle')
-
-                    continue
-
-                # Save time data on first run only
-                if len(result['time_data']) == 0:
-                    result['time_data'] = [x[2] for x in d[0]]
-
-                in_d.append([x[3] for x in d[0]])
-                out_d.append([x[3] for x in d[1]])
-
-            result['in_data'].append([sum(x) / len(in_d) for x in zip(*in_d[::-1])])
-            result['out_data'].append([sum(x) / len(out_d) for x in zip(*out_d[::-1])])
+            #fail = 0
+            #n_cycles = 16
+            #cycles = range(0, n_cycles)
+            #
+            #in_d = []
+            #out_d = []
+            #
+            #for r in cycles:
+            #    try:
+            #        d = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
+            #    except:
+            #        self._log.warn('Failed to get data from scope (%d/%d)!' % (r + 1, cycles))
+            #
+            #        fail += 1
+            #
+            #        if fail > (n_cycles / 2):
+            #            raise Exception('Too many scope failures in averaging cycle')
+            #
+            #        continue
+            #
+            #    # Save time data on first run only
+            #    if len(result['time_data']) == 0:
+            #        result['time_data'] = [x[2] for x in d[0]]
+            #
+            #    in_d.append([x[3] for x in d[0]])
+            #    out_d.append([x[3] for x in d[1]])
+            #
+            #result['in_data'].append([sum(x) / len(in_d) for x in zip(*in_d[::-1])])
+            #result['out_data'].append([sum(x) / len(out_d) for x in zip(*out_d[::-1])])
 
             # Get averaged data
             #self._scope.set_aq_mode(self._scope.mode_aq.AVERAGE, 128)
@@ -237,8 +241,13 @@ class JTFA(Experiment):
             result['temp_sub'].append(meas.tSub)
 
             # Save waveform data
-            #result['in_data'].append([x[3] for x in data[0]])
-            #result['out_data'].append([x[3] for x in data[1]])
+            data = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
+
+            if len(result['time_data']) == 0:
+                result['time_data'] = [x[2] for x in data[0]]
+
+            result['in_data'].append([x[3] for x in data[0]])
+            result['out_data'].append([x[3] for x in data[1]])
 
         # Record how long the dump took
         result['capture_time'] = time.time() - result['capture_start']
@@ -246,7 +255,7 @@ class JTFA(Experiment):
         self._log.info('Capture time: ' + str(result['capture_time']))
 
         # Save dump to matlab file
-        resultFile = os.path.join(self._result_path, 'data_%s.mat' % (time.strftime('%Y%m%d_%H%M%S')))
+        resultFile = os.path.join(self._result_path, 'data_%s_%03d_%s_%02d.mat' % (time.strftime('%Y%m%d_%H%M%S'), target, uid, iter))
         sio.savemat(resultFile, result, do_compression=True)
 
         self._log.info('Result: ' + resultFile)
