@@ -264,3 +264,117 @@ class JTFA(Experiment):
 
     def close(self):
         pass
+
+class Pulse(Experiment):
+    def setup(self, cfg, resultPath, timestr):
+        # Configuration
+        self._chIn = cfg.getint('pulse', 'chIn')
+        chInImp = cfg.get('pulse', 'chInImp')
+        self._chOut = cfg.getint('pulse', 'chOut')
+        chOutImp = cfg.get('pulse', 'chOutImp')
+
+        secPerDiv = cfg.getfloat('pulse', 'secPerDiv')
+
+        self._tStable = cfg.getfloat('pulse', 'tStable')
+        self._tPause = cfg.getfloat('pulse', 'tPause')
+        self._runs =  cfg.getint('pulse', 'runs')
+
+        # Setup instruments
+        self._scope = instrument.Scope(cfg.get('id', 'scope'))
+
+        self._log.info('Scope: ' + self._scope.get_id())
+
+        self._scope.reset()
+        self._scope.set_ch_enable(0, False)
+        self._scope.set_time_scale(secPerDiv)
+        self._scope.set_time_reference(self._scope.time_ref.LEFT)
+        self._scope.set_trigger_sweep(self._scope.trigger_sweep.NORMAL)
+
+        # Edge trigger setup
+        self._scope.set_trigger_mode(self._scope.trigger_mode.EDGE)
+        self._scope.set_trigger_edge_source(self._scope.trigger_source.CHANNEL, self._chIn)
+        self._scope.set_trigger_edge_level(0.05)
+
+        self._scope.set_ch_label_visible(True)
+
+        # Input channel setup
+        self._scope.set_ch_label(self._chIn, 'IN');
+        self._scope.set_ch_atten(self._chIn, 1)
+        self._scope.set_ch_couple(self._chIn, self._scope.ch_couple.DC)
+        self._scope.set_ch_z(self._chIn, chInImp)
+        self._scope.set_ch_enable(self._chIn, True)
+
+        # Output channel setup
+        self._scope.set_ch_label(self._chOut, 'OUT');
+        self._scope.set_ch_atten(self._chOut, 1)
+        self._scope.set_ch_couple(self._chOut, self._scope.ch_couple.DC)
+        self._scope.set_ch_z(self._chOut, chOutImp)
+        self._scope.set_ch_enable(self._chOut, True)
+
+        # Setup fast channel dumping
+        self._scope.get_waveform_smart_multichannel_fast_init()
+
+        # Setup directory for experiment results
+        self._result_path = os.path.join(resultPath, 'jtfa_%s' % (timestr))
+
+        if not os.path.exists(self._result_path):
+            os.mkdir(self._result_path)
+        else:
+            raise IOError('Result path already exists')
+
+        if not os.access(self._result_path, os.W_OK):
+            raise IOError('Result path is not writable')
+
+        self._log.info('Pulse directory: ' + self._result_path)
+
+    def run(self, cfg, resultPath, meas, endTime, target, uid, iter):
+        # Sleep to next window (because of instability caused by temperature change)
+        time.sleep(self._tStable)
+        
+        result = {}
+
+        result['uid'] = uid
+        result['capture_start'] = time.time()
+        result['interval'] = self._tPause
+        result['volt'] = []
+        result['target'] = target
+        result['temp_amb'] = []
+        result['temp_sub'] = []
+        result['time_data'] = []
+        result['in_data'] = []
+        result['out_data'] = []
+        
+        for n in range(0, self._runs):
+            self._log.info("Run %d of %d" % ((n + 1), self._runs))
+            
+            # Record temperature
+            result['volt'].append(meas.volt)
+            result['temp_amb'].append(meas.tAmb)
+            result['temp_sub'].append(meas.tSub)
+
+            # Save waveform data
+            data = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
+
+            if len(result['time_data']) == 0:
+                result['time_data'] = [x[2] for x in data[0]]
+
+            result['in_data'].append([x[3] for x in data[0]])
+            result['out_data'].append([x[3] for x in data[1]])
+            
+            # Sleep to next run unless this is the end of this iteration
+            if n != (self._runs - 1):
+                time.sleep(self._tPause)
+
+        # Record how long the dump took
+        result['capture_time'] = time.time() - result['capture_start']
+
+        self._log.info('Capture time: ' + str(result['capture_time']))
+
+        # Save dump to matlab file
+        resultFile = os.path.join(self._result_path, 'pulse_%s_%03d_%s.mat' % (time.strftime('%Y%m%d_%H%M%S'), target, uid))
+        sio.savemat(resultFile, result, do_compression=True)
+
+        self._log.info('Result: ' + resultFile)
+
+    def close(self):
+        pass

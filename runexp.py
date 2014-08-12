@@ -20,7 +20,7 @@ class Measurements():
         self.volt = 0
         self.target = 0
 
-exp = experiment.JTFA()
+exp = experiment.Pulse()
 meas = Measurements()
 
 def main():
@@ -36,8 +36,10 @@ def main():
 
     parser.add_argument('-v', help='Verbose output', dest='verbose', action='store_true')
     parser.add_argument('--no-temp', help='Run without controlling the device temperature', dest='notemp', action='store_true')
+    parser.add_argument('--lock', help='Lock the front panels of test equipment', dest='lock', action='store_true')
     parser.set_defaults(verbose=False)
     parser.set_defaults(notemp=False)
+    parser.set_defaults(lock=False)
 
     args = parser.parse_args()
 
@@ -102,9 +104,8 @@ def main():
         raise IOError('Result path is not writable')
 
     resultPath = os.path.realpath(resultPath)
-
-
     logging.info('Result path: ' + resultPath)
+
 
     # Setup experiment
     exp.setup(cfg, resultPath, timestr)
@@ -125,12 +126,21 @@ def main():
 
         time.sleep(0.2)
         psu.reset()
+        # Disable fan alarm
+        time.sleep(0.2)
+        psu.set_alarm_mask(0x7F7)
+        time.sleep(0.2)
+        psu.clear_alarm()
         time.sleep(0.2)
         psu.set_voltage(0.0)
         time.sleep(0.2)
         psu.set_current(14.0)
         time.sleep(0.2)
         psu.set_output(True)
+        
+        if args.lock:
+            time.sleep(0.2)
+            psu.set_sys_locked(True)
     else:
         logging.warning('Running without temperature control')
 
@@ -200,13 +210,13 @@ def main():
 
             logging.info('Loop %s %d @ %.2f (%.2f)' % (uid, loop, tempTarget, dT))
 
+            # Set new target temperature
             meas.target = tempTarget
-
             tempCtrl.set_target(tempTarget)
 
             # Do Science!
             fail = 0
-            fail_threshold = 3
+            fail_threshold = 0
 
             for n in range(0, runs):
                 try:

@@ -1,10 +1,11 @@
 import logging
 import math
-import serial
 import struct
 import time
-import visa
 import util
+
+import serial
+import visa
 
 _debug = True
 
@@ -30,6 +31,12 @@ class BaseInstrument:
 
     def ask(self, cmd):
         response = self._dev.ask(cmd)
+        self._log.debug('%s <> %s (%i bytes)' % (self._dev.resource_name, cmd, len(response)))
+        return response
+    
+    def ask_raw(self, cmd):
+        self._dev.write(cmd)
+        response = self._dev.read_raw()
         self._log.debug('%s <> %s (%i bytes)' % (self._dev.resource_name, cmd, len(response)))
         return response
 
@@ -298,7 +305,7 @@ class Scope(BaseInstrument):
         else:
             self.write(":WAV:SOUR " + source)
 
-        waveform = self.ask(":WAV:DATA?")
+        waveform = self.ask_raw(":WAV:DATA?")
 
         if waveform[0] != '#':
             return []
@@ -476,6 +483,9 @@ class PowerSupply(BaseInstrument):
     def reset(self):
         self.write("*RST")
         self.write("*ADR 1")
+    
+    def clear_alarm(self):
+        self.write(":OUTP:PROT:CLE")
 
     def get_voltage(self):
         return self.ask(":MEAS?")
@@ -485,6 +495,12 @@ class PowerSupply(BaseInstrument):
 
     def get_power(self):
         return self.get_voltage() * self.get_power()
+    
+    def set_alarm_mask(self, mask):
+        self.write(":SYST:PROT " + str(mask))
+    
+    def set_sys_locked(self, lock):
+        self.write(":SYST:REM:STAT " + "REM" if lock else "LOC")
 
     def set_voltage(self, voltage):
         self.write(":VOLT " + str(voltage))
