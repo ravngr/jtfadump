@@ -19,6 +19,7 @@ class BaseInstrument:
     def __init__(self, id):
         self._log = logging.getLogger(_logger_name)
         self._dev = visa.instrument(id)
+        self._dev.clear()
 
     def reset(self):
         self._dev.write('*RST')
@@ -61,7 +62,8 @@ class Scope(BaseInstrument):
     """Oscilloscope"""
     channels = 4
 
-    _volt_step = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1.0, 2.0, 5.0 ]
+    #_volt_step = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1.0, 2.0, 5.0 ]
+    _volt_step = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1 ]
 
     ch_couple = util.enum(AC='AC', DC='DC')
     ch_impedance = util.enum(FIFTY='FIFT', HIGH='ONEM')

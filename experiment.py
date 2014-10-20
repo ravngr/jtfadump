@@ -344,22 +344,33 @@ class Pulse(Experiment):
         result['in_data'] = []
         result['out_data'] = []
         
+        fail = 0
+        fail_threshold = 3
+        
         for n in range(0, self._runs):
-            self._log.info("Run %d of %d" % ((n + 1), self._runs))
-            
-            # Record temperature
-            result['volt'].append(meas.volt)
-            result['temp_amb'].append(meas.tAmb)
-            result['temp_sub'].append(meas.tSub)
+            try:
+                self._log.info("Run %d of %d" % ((n + 1), self._runs))
+                
+                # Record temperature
+                result['volt'].append(meas.volt)
+                result['temp_amb'].append(meas.tAmb)
+                result['temp_sub'].append(meas.tSub)
 
-            # Save waveform data
-            data = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
+                # Save waveform data
+                data = self._scope.get_waveform_smart_multichannel_fast([self._chIn, self._chOut])
 
-            if len(result['time_data']) == 0:
-                result['time_data'] = [x[2] for x in data[0]]
+                if len(result['time_data']) == 0:
+                    result['time_data'] = [x[2] for x in data[0]]
 
-            result['in_data'].append([x[3] for x in data[0]])
-            result['out_data'].append([x[3] for x in data[1]])
+                result['in_data'].append([x[3] for x in data[0]])
+                result['out_data'].append([x[3] for x in data[1]])
+            except:
+                fail += 1
+                
+                if fail > fail_threshold:
+                    raise
+                else:
+                    logging.warning('Capture failed! Failure %d of %d allowed' % (fail, fail_threshold))
             
             # Sleep to next run unless this is the end of this iteration
             if n != (self._runs - 1):
