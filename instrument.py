@@ -551,7 +551,7 @@ class SignalGen(BaseInstrument):
 
 class VNA(BaseInstrument):
     def file_read(self, path):
-        data = self.ask(":MMEM:TRAN " + path + "?")
+        data = self.ask(":MMEM:TRAN? \"%s\"" % (path,))
 
         if data[0] != '#':
             return ''
@@ -564,15 +564,15 @@ class VNA(BaseInstrument):
     def file_write(self, path, data):
         size = len(data)
         prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
-        self.write(":MMEM:TRAN " + path + "," + prefix + data)
+        self.write(":MMEM:TRAN \"%s\",%s%s" % (path, prefix, data))
 
     def save_s2p(self, path):
         self.write(":MMEM:STOR:SNP:TYPE:S1P 1")
         self.write(":MMEM:STOR:SNP:TYPE:S2P 1,2")
-        self.write(":MMEM:STOR:SNP " + path)
+        self.write(":MMEM:STOR:SNP \"%s\"" % (path,))
 
     def set_state(self, path):
-        self.write(":MMEM:LOAD " + path)
+        self.write(":MMEM:LOAD \"%s\"" % (path,))
 
 class TemperatureLogger:
     def __init__(self, port):

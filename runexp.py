@@ -58,6 +58,11 @@ def main():
     vMax = cfg.getfloat('param', 'vMax')
     tInterval = cfg.getfloat('param', 'tInterval')
     runs = cfg.getint('param', 'runs')
+    
+    try:
+        rampLimit = cfg.getint('param', 'rampLimit')
+    except ConfigParser.NoOptionError:
+        rampLimit = 0
 
     # Temperature controller
     Kp = cfg.getfloat('pid', 'Kp')
@@ -191,9 +196,19 @@ def main():
     # Start experiment
     tempCtrl.start()
     loop = 0
+    
+    fail = 0
+    fail_threshold = 3
+    
+    try:
+        with open('rampCount.pickle') as f:
+            rampCount = pickle.load(f)
+        logging.warning('Resuming rampCount = %.2f' % (rampCount))
+    except:
+        rampCount = 0
 
     try:
-        while True:
+        while rampLimit == 0 or rampCount < rampLimit:
             # Generate an ID for this loop
             uid = ''.join(random.choice(string.hexdigits[:16]) for x in range(8))
 
@@ -215,34 +230,55 @@ def main():
             tempCtrl.set_target(tempTarget)
 
             # Do Science!
-            fail = 0
-            fail_threshold = 0
-
             for n in range(0, runs):
-                try:
-                    exp.run(cfg, resultPath, meas, nextTime, tempTarget, uid, n)
-                except:
-                    fail += 1
-
-                    if fail > fail_threshold:
-                        raise
-                    else:
-                        logging.warning('Capture failed! Failure %d of %d allowed' % (fail, fail_threshold))
+                logging.info('Run %d of %d' % ((n + 1), runs))
+                
+                exp.run(cfg, resultPath, meas, nextTime, tempTarget, uid, n)
+                
+                #try:
+                #    
+                #except:
+                #    fail += 1
+                #
+                #    if fail > fail_threshold:
+                #        logging.info('Fail threshold exceeded!')
+                #        raise
+                #    else:
+                #        logging.warning('Capture failed! Failure %d of %d allowed' % (fail, fail_threshold))
 
             # Alter output voltage according to state (up/down)
             if tempTarget <= tMin:
                 dT = tStep
-
+                logging.info('dT = %.2f' % (dT))
+                
+                with open('rampCount.pickle', 'w') as f:
+                    pickle.dump(rampCount, f)
+            
             if tempTarget >= tMax:
                 dT = -tStep
-
+                logging.info('dT = %.2f' % (dT))
+                
             tempTarget += dT
             loop += 1
+            
+            if tempTarget == tMin:
+                rampCount += 1
     except:
         # Save current PID state
+        logging.exception('Exception in main thread!')
         tempCtrl.stop()
         exp.close()
         raise
+    
+    logging.info('Exiting')
+    tempCtrl.stop()
+    exp.close()
+    
+    # Clear ramp counter
+    try:
+        os.remove('rampCount.pickle')
+    except:
+        pass
 
 if __name__ == '__main__':
     main()
