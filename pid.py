@@ -19,8 +19,8 @@ class Limit:
         self._max = max
 
 
-class PID:
-    def __init__(self, in_func, out_func, initial, target, limit, Kp, Ki, Kd, period, invert=False):
+class Controller:
+    def __init__(self, in_func, out_func, initial, target, limit, pid_param, period, invert=False):
         self._running = False
 
         self._input = in_func
@@ -32,13 +32,13 @@ class PID:
 
         self._invert = invert
 
-        self.set_tuning(Kp, Ki, Kd)
+        self.set_parameters(pid_param)
 
         # Setup internal variables
         out_func(initial)
         self._output_value = self._limit.clamp(initial)
-        self._i = self._limit.clamp(initial)
-        self._last_in = in_func()
+        self._integral = self._limit.clamp(initial)
+        self._input_prev = in_func()
 
         # Setup thread
         self._thread = threading.Thread(target=self._update)
@@ -46,10 +46,10 @@ class PID:
     def set_target(self, target):
         self._target = target
 
-    def set_tuning(self, Kp, Ki, Kd):
-        self._Kp = Kp
-        self._Ki = Ki * self._period
-        self._Kd = Kd / self._period
+    def set_parameters(self, pid_param):
+        self._Kp = pid_param.p
+        self._Ki = pid_param.i * self._period
+        self._Kd = pid_param.d / self._period
 
         if self._invert:
             self._Kp *= -1
@@ -84,6 +84,9 @@ class PID:
     def get_period(self):
         return self._period
 
+    def get_target(self):
+        return self._target
+
     def get_output_value(self):
         return self._output_value
 
@@ -101,20 +104,20 @@ class PID:
     def _update(self):
         try:
             while True:
-                t = time.time()
+                sample_start_time = time.time()
 
-                v = self._input()
-                err = self._target - v
+                input_current = self._input()
+                input_error = self._target - input_current
 
-                self._i += self._limit.clamp(self._Ki * err)
-                dv = self._last_in - v
+                self._integral = self._limit.clamp(self._integral + self._Ki * input_error)
+                input_diff = self._input_prev - input_current
 
-                self._output_value = self._limit.clamp(self._Kp * err + self._i - self._Kd * dv)
+                self._output_value = self._limit.clamp(self._Kp * input_error + self._integral - self._Kd * input_diff)
                 self._output(self._output_value)
 
-                self._last_in = v
+                self._input_prev = input_current
 
-                st = self._period - (time.time() - t)
+                st = self._period - (time.time() - sample_start_time)
 
                 if st > 0:
                     time.sleep(st)
@@ -124,3 +127,11 @@ class PID:
         except():
             # Set output to zero on exception
             self._output(self._limit.clamp(0))
+            raise
+
+
+class ControllerParameters:
+    def __init__(self, p, i, d):
+        self.p = p
+        self.i = i
+        self.d = d
