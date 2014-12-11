@@ -3,20 +3,21 @@ import threading
 
 
 class Limit:
-    def __init__(self, min, max):
-        self.set_limit(min, max)
+    def __init__(self, minimum, maximum):
+        self._minimum = minimum
+        self._maximum = maximum
 
     def clamp(self, n):
-        if n > self._max:
-            return self._max
-        elif n < self._min:
-            return self._min
+        if n > self._maximum:
+            return self._maximum
+        elif n < self._minimum:
+            return self._minimum
         else:
             return n
 
-    def set_limit(self, min, max):
-        self._min = min
-        self._max = max
+    def set_limit(self, minimum, maximum):
+        self._minimum = minimum
+        self._maximum = maximum
 
 
 class Controller:
@@ -32,6 +33,9 @@ class Controller:
 
         self._invert = invert
 
+        self._p = 0
+        self._i = 0
+        self._d = 0
         self.set_parameters(pid_param)
 
         # Setup internal variables
@@ -47,14 +51,14 @@ class Controller:
         self._target = target
 
     def set_parameters(self, pid_param):
-        self._Kp = pid_param.p
-        self._Ki = pid_param.i * self._period
-        self._Kd = pid_param.d / self._period
+        self._p = pid_param.p
+        self._i = pid_param.i * self._period
+        self._d = pid_param.d / self._period
 
         if self._invert:
-            self._Kp *= -1
-            self._Ki *= -1
-            self._Kd *= -1
+            self._p *= -1
+            self._i *= -1
+            self._d *= -1
 
     def set_period(self, period):
         running = self.is_running()
@@ -64,22 +68,22 @@ class Controller:
 
         r = period / self._period
 
-        self._Ki *= r
-        self._Kd /= r
+        self._i *= r
+        self._d /= r
 
         self._period = period
 
         if running:
             self.start()
 
-    def get_Kp(self):
-        return self._Kp
+    def get_p(self):
+        return self._p
 
-    def get_Ki(self):
-        return self._Ki
+    def get_i(self):
+        return self._i
 
-    def get_Kd(self):
-        return self._Kd
+    def get_d(self):
+        return self._d
 
     def get_period(self):
         return self._period
@@ -109,10 +113,10 @@ class Controller:
                 input_current = self._input()
                 input_error = self._target - input_current
 
-                self._integral = self._limit.clamp(self._integral + self._Ki * input_error)
+                self._integral = self._limit.clamp(self._integral + self._i * input_error)
                 input_diff = self._input_prev - input_current
 
-                self._output_value = self._limit.clamp(self._Kp * input_error + self._integral - self._Kd * input_diff)
+                self._output_value = self._limit.clamp(self._p * input_error + self._integral - self._d * input_diff)
                 self._output(self._output_value)
 
                 self._input_prev = input_current

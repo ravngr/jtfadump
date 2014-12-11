@@ -46,7 +46,7 @@ class VISAConnector(InstrumentConnector):
 
         self._instrument.clear()
 
-        self._log.debug("[OPEN] VISA Resource: {}".format(address))
+        self._log.info("[OPEN] VISA Resource: {}".format(address))
 
     def select_bus_address(self, bus_address, force=False):
         if self._use_bus_address and bus_address is not False:
@@ -171,7 +171,7 @@ class NetworkAnalyzer(Instrument):
         if port_count < 1 or port_count > 4:
             raise InstrumentException("Unsupported number of ports in SNP format")
 
-        self._connector.write(":MMEM:STOR:SNP:TYPE:S{}P {}".format(port_count, ','.join(ports)))
+        self._connector.write(":MMEM:STOR:SNP:TYPE:S{}P {}".format(port_count, ','.join(str(x) for x in ports)))
         self._connector.write(":MMEM:STOR:SNP:FORM {}".format(snp_format))
         self._connector.write(":MMEM:STOR:SNP \"{}\"".format(path))
 
