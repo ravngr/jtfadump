@@ -1,5 +1,5 @@
 from subprocess import Popen, PIPE
-from sys import modules
+import sys
 
 # From http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
 def enum(**enums):
@@ -14,5 +14,5 @@ def get_git_hash():
 
 
 # From http://stackoverflow.com/questions/1176136/convert-string-to-python-class-object
-def class_from_str(class_name):
-    return reduce(getattr, class_name.split('.'), sys.modules[__name__])
+def class_from_str(class_name, parent):
+    return reduce(getattr, class_name.split('.'), sys.modules[parent])

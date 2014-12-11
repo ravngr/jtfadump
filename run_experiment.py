@@ -82,7 +82,8 @@ def main():
     # Setup experiment
     try:
         logging.info("Loading experiment {}".format(args.experiment))
-        run_exp = class_from_str("experiment.{}".format(args.experiment))
+        experiment_class = util.class_from_str("experiment.{}".format(args.experiment), __name__)
+        run_exp = experiment_class(args, cfg, result_dir)
     except:
         logging.exception('Error while attempting to set up experiment')
         return
