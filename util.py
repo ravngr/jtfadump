@@ -10,3 +10,8 @@ def get_git_hash():
     proc = Popen(['git', 'rev-parse','HEAD'], stdout=PIPE)
     (proc_out, _) = proc.communicate()
     return proc_out.strip()
+
+
+# From http://stackoverflow.com/questions/1176136/convert-string-to-python-class-object
+def class_from_str(class_name):
+    return reduce(getattr, class_name.split('.'), sys.modules[__name__])

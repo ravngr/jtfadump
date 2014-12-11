@@ -1,5 +1,6 @@
 import argparse
 import ConfigParser
+import logging
 import os
 import sys
 import time
@@ -81,7 +82,7 @@ def main():
     # Setup experiment
     try:
         logging.info("Loading experiment {}".format(args.experiment))
-        run_exp = globals()[args.experiment](args, cfg, result_dir)
+        run_exp = class_from_str("experiment.{}".format(args.experiment))
     except:
         logging.exception('Error while attempting to set up experiment')
         return
