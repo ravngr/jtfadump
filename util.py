@@ -1,4 +1,5 @@
 from subprocess import Popen, PIPE
+from sys import modules
 
 # From http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
 def enum(**enums):
