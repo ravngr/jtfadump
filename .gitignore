@@ -55,3 +55,6 @@ target/
 
 # Pickle stored variables
 *.pickle
+
+# PyCharm
+/.idea/workspace.xml

@@ -44,7 +44,7 @@ def main():
     if not os.access(log_dir, os.W_OK):
         raise IOError('Log path is not writable')
 
-    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % (timestr))
+    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % (start_time_str))
 
     result_dir = cfg.get('path', 'result')
 
