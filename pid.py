@@ -102,8 +102,8 @@ class Controller:
         self._thread.start()
 
     def stop(self):
-        self._running = False
         self._thread.join()
+        self._running = False
 
     def _update(self):
         try:

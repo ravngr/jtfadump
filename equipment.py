@@ -46,13 +46,13 @@ class VISAConnector(InstrumentConnector):
 
         self._instrument.clear()
 
-        self._log.info("[OPEN] VISA Resource: {}".format(address))
+        self._log.info("[{}] Connected".format(self.get_address()))
 
     def select_bus_address(self, bus_address, force=False):
         if self._use_bus_address and bus_address is not False:
             if force or self._last_bus_address != bus_address:
                 self._instrument.write("*ADR {}".format(bus_address))
-                self._log.debug("[BUS] Select bus address {}".format(bus_address))
+                self._log.debug("[{}] Select bus address {}".format(self.get_address(), bus_address))
 
             self._last_bus_address = bus_address
 
@@ -61,18 +61,33 @@ class VISAConnector(InstrumentConnector):
         self._instrument.write(data)
         self._log.debug("[{}] WRITE: {}".format(self.get_address(), data))
 
-    def query(self, data, bus_address=False):
+    def query(self, data, bus_address=False, timeout=False):
+        orig_timeout = self._instrument.timeout
+
+        if type(timeout)is not bool:
+            self._instrument.timeout = timeout
+
         self.select_bus_address(bus_address)
-        response = self._instrument.ask(data)
+        response = self._instrument.query(data)
         self._log.debug("[{}] QUERY: {} | RESPONSE: {})".format(self.get_address(), data, response))
+
+        self._instrument.timeout = orig_timeout
         return response
 
-    def query_raw(self, data, bus_address=False):
+    def query_raw(self, data, bus_address=False, timeout=False):
+        orig_timeout = self._instrument.timeout
+
+        if type(timeout)is not bool:
+            self._instrument.timeout = timeout
+
         self.select_bus_address(bus_address)
-        response = self._instrument.ask_raw(data)
+        self._instrument.write(data)
+        response = self._instrument.read_raw()
         response_len = len(response)
         self._log.debug("[{}] RAW QUERY: {} | RESPONSE: {} byte{}".format(self.get_address(), data, response_len,
                                                                's' if response_len == 1 else ''))
+
+        self._instrument.timeout = orig_timeout
         return response
 
 
@@ -163,7 +178,16 @@ class NetworkAnalyzer(Instrument):
 
     def __init__(self, connector):
         Instrument.__init__(self, connector, False)
-        self._temp_path = '\\temp'
+
+    def trigger(self):
+        # Select bus as trigger source
+        self._connector.write(":TRIG:SOUR BUS")
+        Instrument.trigger(self)
+
+    def trigger_single(self, channel=1):
+        # Setup for single measurement
+        self._connector.write(":INIT{}".format(channel))
+        self.trigger()
 
     def data_save_snp(self, path, ports, snp_format=SNP_FORMAT.AUTO):
         port_count = len(ports)
@@ -216,6 +240,9 @@ class NetworkAnalyzer(Instrument):
     def state_save(self, path):
         self._connector.write(":MMEM:STOR \"{}\"".format(path))
 
+    def clear_average(self, channel=1):
+        self._connector.write(":SENS{}:AVER:CLE".format(channel))
+
     def get_errors(self):
         err_list = []
         err_flag = True
@@ -233,6 +260,12 @@ class NetworkAnalyzer(Instrument):
                 err_list.extend(err)
 
         return err_list
+
+    def is_ready(self):
+        return self._connector.query(":SYST:TEMP")[0] is '1'
+
+    def wait_measurement(self):
+        self._connector.query("*OPC?", self._bus_address, timeout=None)
 
 
 class Oscilloscope(Instrument):
