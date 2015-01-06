@@ -1,5 +1,10 @@
 import equipment
+import logging
 import os
+
+import scipy.io as sio
+
+import util
 
 
 class DataCapture:
@@ -8,7 +13,9 @@ class DataCapture:
         self._cfg = cfg
         self._result_dir = result_dir
 
-    def data_read(self, n, capture_id, experiment_state):
+        self._logger = logging.getLogger(__name__)
+
+    def save(self, n, capture_id, experiment_state):
         raise NotImplementedError()
 
 
@@ -40,18 +47,27 @@ class VNAData(DataCapture):
         if self._args.lock:
             self._vna.lock(True, True, False)
 
-    def data_read(self, n, capture_id, experiment_state):
+    def save(self, n, capture_id, experiment_state):
         # Capture file name
-        data_path = os.path.join(self._result_dir, "vna_{}.s2p".format(capture_id))
+        snp_path = os.path.join(self._result_dir, "vna_{}.s2p".format(capture_id))
+        txt_path = os.path.join(self._result_dir, "cap_{}.txt".format(capture_id))
+        mat_path = os.path.join(self._result_dir, "dat_{}.mat".format(capture_id))
 
         # Capture data
-        self._vna.trigger_single()
+        self._logger.info("Trigger capture")
+        self._vna.trigger()
         self._vna.wait_measurement()
 
         # Save S2P file and transfer to PC
+        self._logger.info("Transfer SNP file: {}".format(snp_path))
         self._vna.data_save_snp(self._PATH_DATA, [1, 2])
-        self._vna.file_transfer(data_path, self._PATH_DATA, False)
+        self._vna.file_transfer(snp_path, self._PATH_DATA, False)
         self._vna.file_delete(self._PATH_DATA)
+
+        # Read touchstone file
+        #snp_data = util.read_snp(snp_path)
+
+        # Save to .mat file with state data
 
 
 class FrequencyCounterData(DataCapture):

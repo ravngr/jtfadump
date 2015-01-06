@@ -12,12 +12,15 @@ import util
 class InstrumentConnector:
     def __init__(self, address):
         self._address = address
-        self._log = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
 
     def get_address(self):
         return self._address
 
     def write(self, data):
+        raise NotImplementedError()
+        
+    def write_raw(self, data, raw_data):
         raise NotImplementedError()
 
     def query(self, data):
@@ -46,20 +49,28 @@ class VISAConnector(InstrumentConnector):
 
         self._instrument.clear()
 
-        self._log.info("[{}] Connected".format(self.get_address()))
+        self._logger.info("{} Connected".format(self.get_address()))
 
     def select_bus_address(self, bus_address, force=False):
         if self._use_bus_address and bus_address is not False:
             if force or self._last_bus_address != bus_address:
+                self._logger.debug("{} Select bus address {}".format(self.get_address(), bus_address))
                 self._instrument.write("*ADR {}".format(bus_address))
-                self._log.debug("[{}] Select bus address {}".format(self.get_address(), bus_address))
 
-            self._last_bus_address = bus_address
+                self._last_bus_address = bus_address
+                
+                # Wait
+                time.sleep(0.5)
 
     def write(self, data, bus_address=False):
         self.select_bus_address(bus_address)
+        self._logger.debug("{} WRITE: {}".format(self.get_address(), data))
         self._instrument.write(data)
-        self._log.debug("[{}] WRITE: {}".format(self.get_address(), data))
+        
+    def write_raw(self, data, raw_data, bus_address=False):
+        self.select_bus_address(bus_address)
+        self._logger.debug("{} WRITE RAW: {}({} bytes)".format(self.get_address(), data, len(raw_data)))
+        self._instrument.write_binary_values(data, raw_data, datatype='c')
 
     def query(self, data, bus_address=False, timeout=False):
         orig_timeout = self._instrument.timeout
@@ -68,8 +79,9 @@ class VISAConnector(InstrumentConnector):
             self._instrument.timeout = timeout
 
         self.select_bus_address(bus_address)
+        self._logger.debug("{} QUERY: {}".format(self.get_address(), data))
         response = self._instrument.query(data)
-        self._log.debug("[{}] QUERY: {} | RESPONSE: {})".format(self.get_address(), data, response))
+        self._logger.debug("{} RESPONSE: {})".format(self.get_address(), response))
 
         self._instrument.timeout = orig_timeout
         return response
@@ -81,10 +93,11 @@ class VISAConnector(InstrumentConnector):
             self._instrument.timeout = timeout
 
         self.select_bus_address(bus_address)
+        self._logger.debug("{} QUERY: {}".format(self.get_address(), data))
         self._instrument.write(data)
         response = self._instrument.read_raw()
         response_len = len(response)
-        self._log.debug("[{}] RAW QUERY: {} | RESPONSE: {} byte{}".format(self.get_address(), data, response_len,
+        self._logger.debug("{} RESPONSE: {} byte{}".format(self.get_address(), response_len,
                                                                's' if response_len == 1 else ''))
 
         self._instrument.timeout = orig_timeout
@@ -180,9 +193,9 @@ class NetworkAnalyzer(Instrument):
         Instrument.__init__(self, connector, False)
 
     def trigger(self):
-        # Select bus as trigger source
-        self._connector.write(":TRIG:SOUR BUS")
-        Instrument.trigger(self)
+        # Select manual as trigger source so wait_measurement() will work properly
+        self._connector.write(":TRIG:SOUR MAN")
+        self._connector.write(":TRIG:SING")
 
     def trigger_single(self, channel=1):
         # Setup for single measurement
@@ -208,7 +221,7 @@ class NetworkAnalyzer(Instrument):
         self._connector.write(":MMEM:DEL \"{}\"".format(path))
 
     def file_read(self, path):
-        data = self._connector.query(":MMEM:TRAN? \"{}\"".format(path))
+        data = self._connector.query_raw(":MMEM:TRAN? \"{}\"".format(path))
 
         if data[0] != '#':
             return ''
@@ -219,16 +232,16 @@ class NetworkAnalyzer(Instrument):
         return data[data_start:(data_start + data_size)]
 
     def file_write(self, path, data):
-        size = len(data)
-        prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
-        self._connector.write(":MMEM:TRAN \"{}\",{}{}".format(path, prefix, data))
+        #size = len(data)
+        #prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
+        self._connector.write_raw(":MMEM:TRAN \"{}\",".format(path), data)
 
     def file_transfer(self, local_path, remote_path, to_vna):
         file_mode = "rb" if to_vna else "wb"
 
         with open(local_path, file_mode) as f:
             if to_vna:
-                data = f.readall()
+                data = f.read()
                 self.file_write(remote_path, data)
             else:
                 data = self.file_read(remote_path)
@@ -602,10 +615,10 @@ class PowerSupply(Instrument):
         self._connector.write(":OUTP:PROT:CLE", self._bus_address)
 
     def get_current(self):
-        return self._connector.query(":MEAS:CURR?", self._bus_address)
+        return float(self._connector.query(":MEAS:CURR?", self._bus_address))
 
     def get_voltage(self):
-        return self._connector.query(":MEAS?", self._bus_address)
+        return float(self._connector.query(":MEAS?", self._bus_address))
 
     def get_power(self):
         return self.get_voltage() * self.get_current()

@@ -53,8 +53,14 @@ class TemperatureRegulator(Regulator):
             pid_invert
         )
 
+    def lock_acquire(self):
+        return self._controller.lock_acquire()
+
+    def lock_release(self):
+        return self._controller.lock_release()
+
     def set_target(self, target):
-            self._controller.set_target(target)
+        self._controller.set_target(target)
 
     def get_reading(self):
         return self.get_temperature()
@@ -64,23 +70,31 @@ class TemperatureRegulator(Regulator):
 
     def start(self):
         if not self._controller.is_running():
+            self._power_supply.set_output_enable(True)
             self._controller.start()
 
     def stop(self):
-        self._controller.stop()
+        if self._controller.is_running():
+            self._controller.stop()
+            self._controller.lock_acquire()
+            self._power_supply.set_output_enable(False)
+            self._controller.lock_release()
 
     def get_current(self):
-        return self._power_supply.get_current()
+        current = self._power_supply.get_current()
+        return current
 
     def get_voltage(self):
-        return self._power_supply.get_voltage()
+        voltage = self._power_supply.get_voltage()
+        return voltage
 
     def get_power(self):
-        return self._power_supply.get_power()
+        power = self._power_supply.get_power()
+        return power
 
-    # Function used by PID controller
-    def get_temperature(self):
-        return self._temp_logger.get_temperature(self._temp_logger_channel)
+    # Functions used by PID controller
+    def get_temperature(self, channel=None):
+        return self._temp_logger.get_temperature(channel or self._temp_logger_channel)
 
     def _set_voltage(self, voltage):
         if self._enabled:

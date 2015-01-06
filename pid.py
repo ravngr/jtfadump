@@ -1,5 +1,5 @@
-import time
 import threading
+import time
 
 
 class Limit:
@@ -46,6 +46,7 @@ class Controller:
 
         # Setup thread
         self._thread = threading.Thread(target=self._update)
+        self._lock = threading.Lock()
 
     def set_target(self, target):
         self._target = target
@@ -94,21 +95,31 @@ class Controller:
     def get_output_value(self):
         return self._output_value
 
+    def lock_acquire(self):
+        self._lock.acquire(True)
+
+    def lock_release(self):
+        self._lock.release()
+
     def is_running(self):
         return self._thread.is_alive()
 
     def start(self):
-        self._running = True
-        self._thread.start()
+        if not self._running:
+            self._running = True
+            self._thread.start()
 
     def stop(self):
-        self._thread.join()
-        self._running = False
+        if self._running:
+            self._running = False
+            self._thread.join()
 
     def _update(self):
         try:
             while True:
                 sample_start_time = time.time()
+
+                self._lock.acquire(True)
 
                 input_current = self._input()
                 input_error = self._target - input_current
@@ -118,6 +129,10 @@ class Controller:
 
                 self._output_value = self._limit.clamp(self._p * input_error + self._integral - self._d * input_diff)
                 self._output(self._output_value)
+
+                self._lock.release()
+                
+                #print "IN: {}, OUT: {}".format(input_current, self._output_value)
 
                 self._input_prev = input_current
 

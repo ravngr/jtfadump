@@ -1,3 +1,6 @@
+# -- coding: utf-8 --
+
+import logging
 import serial
 import struct
 
@@ -12,6 +15,8 @@ class TemperatureLogger:
         # Open serial port
         self._port = serial.Serial(port, 9600, timeout=1)
 
+        self._logger = logging.getLogger(__name__)
+
     def get_temperature(self, channel=0):
         # Logger returns data when prompted with 'A' character
         self._port.write(self.PAYLOAD_REQUEST)
@@ -19,4 +24,8 @@ class TemperatureLogger:
 
         r = self._port.read(self.PAYLOAD_SIZE)
         # Unpack data into platform appropriate format
-        return (struct.unpack('>h', r[self.PAYLOAD_DATA_OFFSET_LOW+channel:self.PAYLOAD_DATA_OFFSET_HIGH+channel])[0]) / 10.0
+        t = (struct.unpack('>h', r[self.PAYLOAD_DATA_OFFSET_LOW+channel:self.PAYLOAD_DATA_OFFSET_HIGH+channel])[0]) / 10.0
+
+        self._logger.debug(u"{} READ ch{}: {}°C".format(self._port.name, channel, t))
+
+        return t
