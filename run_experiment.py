@@ -142,7 +142,11 @@ def main():
             root_logger.info("Experiment step {}: {}".format(loop, capture_id))
 
             run_exp.step()
-            run_data_capture.save(loop, capture_id, run_exp.get_state())
+            
+            experiment_state = run_exp.get_state()
+            experiment_state['capture_id'] = capture_id
+            
+            run_data_capture.save(loop, capture_id, experiment_state)
 
             loop += 1
     except:

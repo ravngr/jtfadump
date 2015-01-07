@@ -70,7 +70,7 @@ def read_snp(snp_path):
             skip = False
             continue
 
-        if re.match('^[KMG]?Hz$', options[n]):
+        if re.match('^[KMG]?HZ$', options[n]):
             if options[n][0] == 'H':
                 unit_multiplier = 1
             elif options[n][0] == 'K':
@@ -98,7 +98,7 @@ def read_snp(snp_path):
             unit_r = int(options[n + 1])
             skip = True
         else:
-            raise SNPFormatException('Invalid option line format')
+            raise SNPFormatException("Invalid option line format (option: {})".format(options[n]))
 
     # Analyse the number of ports in the data
     data_length = len(snp_text)
@@ -141,9 +141,29 @@ def read_snp(snp_path):
 
         # 2 port data must be rearranged
         if ports == 2:
-            data_fields = [data_fields(1), data_fields(2), data_fields(5), data_fields(6), data_fields(3), data_fields(4), data_fields(7), data_fields(8)];
+            data_fields = [data_fields[0], data_fields[1], data_fields[2], data_fields[5], data_fields[6], data_fields[3], data_fields[4], data_fields[7], data_fields[8]];
 
+        net_data = [[]]
+        
         for m in range(1, len(data_fields), 2):
-            pass
+            a = data_fields[m]
+            b = data_fields[m + 1]
+            
+            if unit_db:
+                a = math.pow(10, (a / 20))
+            
+            if unit_angle:
+                mag = a
+                ang = math.radians(b)
+                
+                a = mag * math.cos(ang)
+                b = mag * math.sin(ang)
+                
+            if len(net_data[-1]) == ports:
+                net_data.append([])
+            
+            net_data[-1].append(complex(a, b))
 
-        data.append((float(data_fields[0]) * unit_multiplier), )
+        data.append(((float(data_fields[0]) * unit_multiplier), net_data))
+
+    return (parameter_type, unit_r, data)
