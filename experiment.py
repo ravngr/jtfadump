@@ -38,9 +38,11 @@ class Experiment:
 
     def get_state(self, capture_id):
         state = {
-            'experiment': self.__name__,
+            'experiment': self.__class__.__name__,
             'capture_id': capture_id
         }
+        
+        return state
 
 
 class TemperatureExperiment(Experiment):
@@ -128,7 +130,7 @@ class TemperatureExperiment(Experiment):
 
             self._temperature_regulator.lock_release()
         else:
-            key = (state['sensor_temperature'])
+            key = (state['result_sensor_temperature'])
 
         return key
 

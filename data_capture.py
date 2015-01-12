@@ -25,7 +25,7 @@ class DataCapture:
 
     def _save_state(self, n, capture_id, run_exp):
         experiment_state = run_exp.get_state(capture_id)
-        experiment_state['data_capture'] = self.__name__
+        experiment_state['data_capture'] = self.__class__.__name__
 
         txt_path = os.path.join(self._result_dir, self._gen_file_name('cap', 'txt', capture_id))
 
@@ -155,8 +155,8 @@ class PulseData(DataCapture):
             for name, param in enumerate(result_key):
                 experiment_state[name].append(param)
 
-        experiment_state['scope_in'] = experiment_in_result
-        experiment_state['scope_out'] = experiment_out_result
+        experiment_state['result_scope_in'] = experiment_in_result
+        experiment_state['result_scope_out'] = experiment_out_result
 
         # Save results to .mat file
         self._save_mat('scope_mat', capture_id, experiment_state)
@@ -178,7 +178,7 @@ class VNAData(DataCapture):
         vna_connector = equipment.VISAConnector(vna_address)
         self._vna = equipment.NetworkAnalyzer(vna_connector)
 
-        self._vna.reset()
+        #self._vna.reset()
 
         # Lock the front panel
         if self._args.lock:
@@ -215,16 +215,16 @@ class VNAData(DataCapture):
             # Read touchstone file
             snp_data = util.read_snp(snp_path)
 
-            experiment_state['snp_type'] = snp_data[0]
-            experiment_state['snp_r'] = snp_data[1]
+            experiment_state['result_snp_type'] = snp_data[0]
+            experiment_state['result_snp_r'] = snp_data[1]
             snp_data_merge = snp_data[2]
 
             # Append VNA data
             snp_frequency_full.extend([d[0] for d in snp_data_merge])
             snp_data_full.extend([d[1] for d in snp_data_merge])
 
-        experiment_state['snp_frequency'] = snp_frequency_full
-        experiment_state['snp_data'] = snp_data_full
+        experiment_state['result_snp_frequency'] = snp_frequency_full
+        experiment_state['result_snp_data'] = snp_data_full
 
         # Save to .mat file with state data
         self._save_mat('vna_mat', capture_id, experiment_state)

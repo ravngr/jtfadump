@@ -1,3 +1,8 @@
+# -- coding: utf-8 --
+
+import logging
+import time
+
 import pid
 
 
@@ -31,8 +36,14 @@ class Regulator:
 
 
 class TemperatureRegulator(Regulator):
+    _RAMP_THRESHOLD = 40.0
+    _RAMP_SPEED = 10.0
+    _RAMP_INTERVAL = 5.0
+
     def __init__(self, temp_logger, temp_logger_channel, power_supply, pid_param, pid_period, voltage_limit, pid_invert=False):
         Regulator.__init__(self)
+
+        self._logger = logging.getLogger(__name__)
 
         # Test equipment
         self._temp_logger_channel = temp_logger_channel
@@ -75,22 +86,32 @@ class TemperatureRegulator(Regulator):
 
     def stop(self):
         if self._controller.is_running():
+            t = self.get_temperature()
+            self._controller.set_target(t)
+
+            # Ramp down temperature if necessary
+            if t > self._RAMP_THRESHOLD:
+                self._logger.warning(u"Temperature is over threshold, ramping temperature down to {}°C".format(t))
+
+            while t >= self._RAMP_THRESHOLD:
+                t -= self._RAMP_SPEED / (60.0 / self._RAMP_INTERVAL)
+                self._logger.info(u"Set temperature: {}°C".format(t))
+                self._controller.set_target(t)
+                time.sleep(self._RAMP_INTERVAL)
+
             self._controller.stop()
             self._controller.lock_acquire()
             self._power_supply.set_output_enable(False)
             self._controller.lock_release()
 
     def get_current(self):
-        current = self._power_supply.get_current()
-        return current
+        return self._power_supply.get_current()
 
     def get_voltage(self):
-        voltage = self._power_supply.get_voltage()
-        return voltage
+        return self._power_supply.get_voltage()
 
     def get_power(self):
-        power = self._power_supply.get_power()
-        return power
+        return self._power_supply.get_power()
 
     # Functions used by PID controller
     def get_temperature(self, channel=None):

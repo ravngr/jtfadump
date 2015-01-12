@@ -2,12 +2,18 @@ import argparse
 import ConfigParser
 import logging
 import os
+import pickle
 import sys
 import time
+import traceback
+
+import pushover
+import pyvisa
 
 import data_capture
 import equipment
 import experiment
+import regulator
 import templogger
 import util
 
@@ -27,10 +33,12 @@ def main():
 
     parse.add_argument('-v', help='Verbose output', dest='verbose', action='store_true')
     parse.add_argument('--dry-run', help='Run without regulating experiment conditions', dest='dry_run', action='store_true')
+    parse.add_argument('--pushover', help='Send notifications using pushover service', dest='notify', action='store_true')
     parse.add_argument('--lock', help='Lock the front panels of test equipment', dest='lock', action='store_true')
     parse.add_argument('--visa', help='Display VISA traffic in console', dest='visa', action='store_true')
     parse.set_defaults(verbose=False)
     parse.set_defaults(notemp=False)
+    parse.set_defaults(notify=False)
     parse.set_defaults(lock=False)
     parse.set_defaults(visa=False)
 
@@ -81,10 +89,11 @@ def main():
     data_logger = logging.getLogger(data_capture.__name__)
     equipment_logger = logging.getLogger(equipment.__name__)
     experiment_logger = logging.getLogger(experiment.__name__)
+    regulator_logger = logging.getLogger(regulator.__name__)
     temperature_logger = logging.getLogger(templogger.__name__)
 
     # Set defaults
-    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, temperature_logger]:
+    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger]:
         logger.handlers = []
         logger.setLevel(logging.DEBUG)
         logger.addHandler(log_handle_console)
@@ -95,6 +104,8 @@ def main():
         temperature_logger.removeHandler(log_handle_console)
 
     root_logger.info("jtfadump | hash: {}".format(util.get_git_hash()))
+    root_logger.info("python {}".format(sys.version))
+    root_logger.info("pyvisa {}".format(pyvisa.__version__))
     root_logger.info("Started: {}".format(time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime())))
     root_logger.info("Logging path: {}".format(log_file_path))
     root_logger.info("Result directory: {}".format(result_dir))
@@ -110,6 +121,12 @@ def main():
             root_logger.debug("{}: {}".format(item[0], item[1]))
 
     root_logger.debug("--- END CONFIGURATION LISTING ---")
+
+
+    # Setup notification if required
+    if args.notify:
+        notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
+        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture), title='jtfadump Started')
 
 
     # Setup experiment
@@ -160,12 +177,20 @@ def main():
             os.unlink(_LOOP_STATE_FILE)
         except:
             pass
+    except (KeyboardInterrupt, SystemExit):
+        root_logger.exception('User terminated experiment', exc_info=True)
     except:
         root_logger.exception('Error while running experiment', exc_info=True)
+
+        if args.notify:
+            notify.send_message("Exception occured during experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
     finally:
         run_exp.stop()
 
     root_logger.info('Experiment stopped')
+
+    if args.notify:
+        notify.send_message("Experiment stopped after {} loop{}".format(loop, '' if loop == 1 else 's'), title='jtfadump Stopped')
 
 
 if __name__ == "__main__":
