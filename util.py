@@ -22,6 +22,9 @@ def class_from_str(class_name, parent):
 def rand_hex_str(length=8):
     return ''.join(random.choice(string.hexdigits[:16]) for x in range(length))
 
+def str2bool(s):
+    return True if s.lower() in ['true', '1', 'yes', 'y'] else False
+
 class SNPFormatException(Exception):
     def __init__(self, value):
         self.value = value

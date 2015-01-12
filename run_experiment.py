@@ -11,6 +11,8 @@ import experiment
 import templogger
 import util
 
+_LOOP_STATE_FILE = 'loop.pickle'
+
 def main():
     # Get start time
     start_time_str = time.strftime('%Y%m%d_%H%M%S')
@@ -125,7 +127,7 @@ def main():
         data_capture_class = util.class_from_str("data_capture.{}".format(args.capture), __name__)
         run_data_capture = data_capture_class(args, cfg, result_dir)
     except:
-        logging.exception('Exception while loading data capture class', exc_info=True)
+        root_logger.exception('Exception while loading data capture class', exc_info=True)
         run_exp.stop()
         return
 
@@ -134,7 +136,12 @@ def main():
 
 
     # Run the experiment
-    loop = 0
+    try:
+        with open(_LOOP_STATE_FILE, 'r') as f:
+            loop = pickle.load(f)
+            root_logger.info("Loaded existing loop counter from file")
+    except:
+        loop = 0
 
     try:
         while run_exp.is_running():
@@ -142,13 +149,17 @@ def main():
             root_logger.info("Experiment step {}: {}".format(loop, capture_id))
 
             run_exp.step()
-            
-            experiment_state = run_exp.get_state()
-            experiment_state['capture_id'] = capture_id
-            
-            run_data_capture.save(loop, capture_id, experiment_state)
+            run_data_capture.save(loop, capture_id, run_exp)
 
             loop += 1
+
+            with open(_LOOP_STATE_FILE, 'w') as f:
+                pickle.dump(loop, f)
+
+        try:
+            os.unlink(_LOOP_STATE_FILE)
+        except:
+            pass
     except:
         root_logger.exception('Error while running experiment', exc_info=True)
     finally:

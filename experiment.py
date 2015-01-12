@@ -30,8 +30,17 @@ class Experiment:
     def is_running(self):
         return self._running
 
-    def get_state(self):
+    def get_result_key(self):
         raise NotImplementedError()
+
+    def get_result_key_name(self):
+        raise NotImplementedError()
+
+    def get_state(self, capture_id):
+        state = {
+            'experiment': self.__name__,
+            'capture_id': capture_id
+        }
 
 
 class TemperatureExperiment(Experiment):
@@ -111,7 +120,24 @@ class TemperatureExperiment(Experiment):
         self._logger.info("Stopping temperature regulator")
         self._temperature_regulator.stop()
 
-    def get_state(self):
+    def get_result_key(self, state=None):
+        if not state:
+            self._temperature_regulator.lock_acquire()
+
+            key = (self._temperature_regulator.get_temperature())
+
+            self._temperature_regulator.lock_release()
+        else:
+            key = (state['sensor_temperature'])
+
+        return key
+
+    def get_result_key_name(self):
+        return ('sensor_temperature')
+
+    def get_state(self, capture_id):
+        parent_state = Experiment.get_state(self, capture_id)
+
         self._temperature_regulator.lock_acquire()
 
         state = {
@@ -124,12 +150,14 @@ class TemperatureExperiment(Experiment):
 
         self._temperature_regulator.lock_release()
 
-        return state
+        return dict(state.items() + parent_state.items())
 
 
 class HumidityExperiment(Experiment):
-    pass
+    def get_result_key_name(self):
+        return ('sensor_temperature', 'sensor_humidity')
 
 
 class ExposureExperiment(Experiment):
-    pass
+    def get_result_key_name(self):
+        return ('sensor_temperature', 'sensor_analyte')

@@ -285,6 +285,8 @@ class Oscilloscope(Instrument):
     _TIMEOUT_DEFAULT = 5.0
     _VOLTAGE_STEPS = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1 ]
 
+    ALL_CHANNELS = 0
+
     CHANNEL_COUPLING = util.enum(AC='AC', DC='DC')
     CHANNEL_IMPEDANCE = util.enum(FIFTY='FIFT', HIGH='ONEM')
     IMAGE_FORMAT = util.enum(BMP='BMP', BMP8='BMP8', PNG='PNG')
@@ -328,7 +330,7 @@ class Oscilloscope(Instrument):
     def set_channel_coupling(self, channel, coupling):
         self._connector.write(":CHAN{}:COUP {}".format(channel, coupling))
 
-    def set_channel_enable(self, channel=0, enabled=False):
+    def set_channel_enable(self, channel=ALL_CHANNELS, enabled=False):
         if channel == 0:
             for n in range(1, (self._channels + 1)):
                 self._connector.write(":CHAN{}:DISP {}".format(n, self._cast_bool(enabled)))

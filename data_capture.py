@@ -1,7 +1,9 @@
 import equipment
 import logging
 import os
+import time
 
+import numpy
 import scipy.io as sio
 
 import util
@@ -15,26 +17,153 @@ class DataCapture:
 
         self._logger = logging.getLogger(__name__)
 
-    def save(self, n, capture_id, experiment_state):
+    def save(self, n, capture_id, run_exp):
         raise NotImplementedError()
-    
-    def _save_summary(self, capture_id, experiment_state):
-        txt_path = os.path.join(self._result_dir, "cap_{}.txt".format(capture_id))
-        
+
+    def _gen_file_name(self, prefix, extension, capture_id):
+        return "{}_{}_{}.{}".format(prefix, time.strftime('%Y%m%d%H%M%S'), capture_id, extension)
+
+    def _save_state(self, n, capture_id, run_exp):
+        experiment_state = run_exp.get_state(capture_id)
+        experiment_state['data_capture'] = self.__name__
+
+        txt_path = os.path.join(self._result_dir, self._gen_file_name('cap', 'txt', capture_id))
+
         with open(txt_path, 'w') as f:
             for key, value in experiment_state.iteritems():
                 f.write("{}: {}\n".format(key, value))
-        
+
         self._logger.info("Summary file created: {}".format(txt_path))
-        
-        return txt_path
+
+        return experiment_state
+
+    def _save_mat(self, prefix, capture_id, data):
+        mat_path = os.path.join(self._result_dir, self._gen_file_name(prefix, 'mat', capture_id))
+        sio.savemat(mat_path, data, do_compression=True)
+        self._logger.info("MATLAB file created: {}".format(mat_path))
 
 
-class OscilloscopeData(DataCapture):
-    pass
+class PulseData(DataCapture):
+    _CFG_SECTION = 'pulse'
+
+    def __init__(self, args, cfg, result_dir):
+        DataCapture.__init__(args, cfg, result_dir)
+
+        self._fail_threshold = self._cfg.get(self._CFG_SECTION, 'fail_threshold')
+
+        scope_address = self._cfg.get(self._CFG_SECTION, 'scope_address')
+
+        self._scope_ch_in = int(self._cfg.get(self._CFG_SECTION, 'scope_ch_in'))
+        scope_ch_in_50r = util.str2bool(self._cfg.get(self._CFG_SECTION, 'scope_ch_in_50r'))
+        self._scope_ch_out = int(self._cfg.get(self._CFG_SECTION, 'scope_ch_out'))
+        scope_ch_out_50r = util.str2bool(self._cfg.get(self._CFG_SECTION, 'scope_ch_out_50r'))
+        scope_time_div = float(self._cfg.get(self._CFG_SECTION, 'scope_time_div'))
+
+        self._scope_avg = int(self._cfg.get(self._CFG_SECTION, 'scope_avg'))
+
+        # Connect to oscilloscope and prepare it for captures
+        scope_connector = equipment.VISAConnector(scope_address)
+        self._scope = equipment.Oscilloscope(scope_connector)
+
+        # Clear display
+        self._scope.reset()
+        self._scope.set_channel_enable(self._scope.ALL_CHANNELS, False)
+
+        # Time scale
+        self._scope.set_time_scale(scope_time_div)
+        self._scope.set_time_reference(self._scope.TIME_REFERENCE.LEFT)
+
+        # Triggering
+        self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
+        self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
+        self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
+
+        # Channels
+        for ch in [self._scope_ch_in, self._scope_ch_out]:
+            self._scope.set_channel_enable(ch, True)
+            self._scope.set_channel_atten(ch, 1)
+            self._scope.set_channel_coupling(ch, self._scope.CHANNEL_COUPLING.DC)
+
+        self._scope.set_channel_impedance(self._scope_ch_in, self._scope.CHANNEL_IMPEDANCE.FIFTY if scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+        self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+
+        # Channel labels
+        self._scope.set_channel_label_visible(True)
+        self._scope.set_channel_label(self._scope_ch_in, 'IN')
+        self._scope.set_channel_label(self._scope_ch_out, 'OUT')
+
+        # Setup fast waveform dumping
+        self._scope.setup_waveform_smart()
+
+        # Lock the front panel
+        if self._args.lock:
+            self._scope.lock(True)
+
+    def save(self, n, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, n, capture_id, run_exp)
+
+        fail_count = 0
+        scope_result = {}
+
+        # Take multiple captures for averaging
+        for run in range(0, self._scope_avg):
+            self._logger.info("Capture {} of {}".format(run, self._scope_avg))
+
+            try:
+                capture_state = run_exp.get_state()
+                result_key = run_exp.get_result_key(capture_state)
+
+                scope_capture = self._scope.get_waveform_smart([self._scope_ch_in, self._scope_ch_out])
+                scope_capture_time = [x[2] for x in scope_capture[0]]
+                scope_capture_in = [x[3] for x in scope_capture[0]]
+                scope_capture_out = [x[3] for x in scope_capture[1]]
+
+                if not experiment_state.has_key('scope_time'):
+                    experiment_state['scope_time'] = scope_capture_time
+
+                if scope_result.has_key(result_key):
+                    scope_result[result_key].append((scope_capture_in, scope_capture_out))
+                else:
+                    scope_result[result_key] = [(scope_capture_in, scope_capture_out)]
+            except:
+                fail_count += 1
+
+                if fail_count > self._fail_threshold:
+                    self._logger.error("Capture failure limit exceeded")
+                    raise
+                else:
+                    self._logger.exception("Exception during capture ({} of {} allowed)".format(fail_count, self._fail_threshold))
+
+        self._logger.info("Capture complete, {} bin{} created".format(len(scope_result), '' if len(scope_result) == 1 else 's'))
+
+        # Combine results based off sensor temperature
+        experiment_in_result = []
+        experiment_out_result = []
+
+        result_key_name = run_exp.get_result_key_name()
+
+        for name in result_key_name:
+            experiment_state[name] = []
+
+        for result_key, scope_capture_set in scope_result.iterkeys():
+            scope_capture_in_array = numpy.array([x[0] for x in scope_capture_set])
+            experiment_in_result.append(numpy.mean(scope_capture_in_array, axis=0).tolist())
+
+            scope_capture_out_array = numpy.array([x[1] for x in scope_capture_set])
+            experiment_out_result.append(numpy.mean(scope_capture_out_array, axis=0).tolist())
+
+            for name, param in enumerate(result_key):
+                experiment_state[name].append(param)
+
+        experiment_state['scope_in'] = experiment_in_result
+        experiment_state['scope_out'] = experiment_out_result
+
+        # Save results to .mat file
+        self._save_mat('scope_mat', capture_id, experiment_state)
 
 
 class VNAData(DataCapture):
+    _CFG_SECTION = 'vna'
     _PATH_DATA = 'experiment.s2p'
     _PATH_STATE = 'experiment.sta'
 
@@ -43,29 +172,29 @@ class VNAData(DataCapture):
         DataCapture.__init__(self, args, cfg, result_dir)
 
         # Get configuration
-        vna_address = self._cfg.get('vna', 'address')
-        self._vna_setup_path_list = self._cfg.get('vna', 'setup').split(',')
+        vna_address = self._cfg.get(self._CFG_SECTION, 'vna_address')
+        self._vna_setup_path_list = self._cfg.get(self._CFG_SECTION, 'setup').split(',')
 
         vna_connector = equipment.VISAConnector(vna_address)
         self._vna = equipment.NetworkAnalyzer(vna_connector)
+
+        self._vna.reset()
 
         # Lock the front panel
         if self._args.lock:
             self._vna.lock(True, True, False)
 
-    def save(self, n, capture_id, experiment_state):
-        self._save_summary(capture_id, experiment_state)
+    def save(self, n, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, n, capture_id, run_exp)
 
-        # Capture file name
-        mat_path = os.path.join(self._result_dir, "dat_{}.mat".format(capture_id))
-        
+        # Capture VNA data
         snp_frequency_full = []
         snp_data_full = []
-        
+
         for vna_setup_path in self._vna_setup_path_list:
             vna_setup_name = os.path.splitext(os.path.basename(vna_setup_path))[0]
-            snp_path = os.path.join(self._result_dir, "vna_{}_{}.s2p".format(capture_id, vna_setup_name))
-            
+            snp_path = os.path.join(self._result_dir, self._gen_file_name("vna_snp_{}".format(vna_setup_name), 's2p', capture_id))
+
             # Transfer setup file to VNA and then load it
             self._vna.file_transfer(vna_setup_path, self._PATH_STATE, True)
             self._vna.state_load(self._PATH_STATE)
@@ -85,20 +214,20 @@ class VNAData(DataCapture):
 
             # Read touchstone file
             snp_data = util.read_snp(snp_path)
-            
+
             experiment_state['snp_type'] = snp_data[0]
             experiment_state['snp_r'] = snp_data[1]
-            snp_data = snp_data[2]
-            
-            # Save to .mat file with state data
-            snp_frequency_full.extend([d[0] for d in snp_data])
-            snp_data_full.extend([d[1] for d in snp_data])
-        
+            snp_data_merge = snp_data[2]
+
+            # Append VNA data
+            snp_frequency_full.extend([d[0] for d in snp_data_merge])
+            snp_data_full.extend([d[1] for d in snp_data_merge])
+
         experiment_state['snp_frequency'] = snp_frequency_full
         experiment_state['snp_data'] = snp_data_full
 
-        sio.savemat(mat_path, experiment_state, do_compression=True)
-        self._logger.info("MATLAB file created: {}".format(mat_path))
+        # Save to .mat file with state data
+        self._save_mat('vna_mat', capture_id, experiment_state)
 
 class FrequencyCounterData(DataCapture):
     pass
