@@ -17,13 +17,13 @@ class DataCapture:
 
         self._logger = logging.getLogger(__name__)
 
-    def save(self, n, capture_id, run_exp):
+    def save(self, capture_id, run_exp):
         raise NotImplementedError()
 
     def _gen_file_name(self, prefix, extension, capture_id):
         return "{}_{}_{}.{}".format(prefix, time.strftime('%Y%m%d%H%M%S'), capture_id, extension)
 
-    def _save_state(self, n, capture_id, run_exp):
+    def _save_state(self, capture_id, run_exp):
         experiment_state = run_exp.get_state(capture_id)
         experiment_state['data_capture'] = self.__class__.__name__
 
@@ -47,19 +47,20 @@ class PulseData(DataCapture):
     _CFG_SECTION = 'pulse'
 
     def __init__(self, args, cfg, result_dir):
-        DataCapture.__init__(args, cfg, result_dir)
+        DataCapture.__init__(self, args, cfg, result_dir)
 
-        self._fail_threshold = self._cfg.get(self._CFG_SECTION, 'fail_threshold')
+        self._fail_threshold = self._cfg.getint(self._CFG_SECTION, 'fail_threshold')
 
         scope_address = self._cfg.get(self._CFG_SECTION, 'scope_address')
 
-        self._scope_ch_in = int(self._cfg.get(self._CFG_SECTION, 'scope_ch_in'))
-        scope_ch_in_50r = util.str2bool(self._cfg.get(self._CFG_SECTION, 'scope_ch_in_50r'))
-        self._scope_ch_out = int(self._cfg.get(self._CFG_SECTION, 'scope_ch_out'))
-        scope_ch_out_50r = util.str2bool(self._cfg.get(self._CFG_SECTION, 'scope_ch_out_50r'))
-        scope_time_div = float(self._cfg.get(self._CFG_SECTION, 'scope_time_div'))
+        self._scope_ch_in = self._cfg.getint(self._CFG_SECTION, 'scope_ch_in')
+        scope_ch_in_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_in_50r')
+        self._scope_ch_out = self._cfg.getint(self._CFG_SECTION, 'scope_ch_out')
+        scope_ch_out_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_out_50r')
+        scope_time_div = self._cfg.getfloat(self._CFG_SECTION, 'scope_time_div')
+        scope_trig_level = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_level')
 
-        self._scope_avg = int(self._cfg.get(self._CFG_SECTION, 'scope_avg'))
+        self._scope_avg = self._cfg.getint(self._CFG_SECTION, 'scope_avg')
 
         # Connect to oscilloscope and prepare it for captures
         scope_connector = equipment.VISAConnector(scope_address)
@@ -77,6 +78,7 @@ class PulseData(DataCapture):
         self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
         self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
         self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
+        self._scope.set_trigger_edge_level(scope_trig_level)
 
         # Channels
         for ch in [self._scope_ch_in, self._scope_ch_out]:
@@ -99,18 +101,18 @@ class PulseData(DataCapture):
         if self._args.lock:
             self._scope.lock(True)
 
-    def save(self, n, capture_id, run_exp):
-        experiment_state = DataCapture._save_state(self, n, capture_id, run_exp)
+    def save(self, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
 
         fail_count = 0
         scope_result = {}
 
         # Take multiple captures for averaging
         for run in range(0, self._scope_avg):
-            self._logger.info("Capture {} of {}".format(run, self._scope_avg))
+            self._logger.info("Capture {} of {}".format(run + 1, self._scope_avg))
 
             try:
-                capture_state = run_exp.get_state()
+                capture_state = run_exp.get_state(capture_id)
                 result_key = run_exp.get_result_key(capture_state)
 
                 scope_capture = self._scope.get_waveform_smart([self._scope_ch_in, self._scope_ch_out])
@@ -118,8 +120,8 @@ class PulseData(DataCapture):
                 scope_capture_in = [x[3] for x in scope_capture[0]]
                 scope_capture_out = [x[3] for x in scope_capture[1]]
 
-                if not experiment_state.has_key('scope_time'):
-                    experiment_state['scope_time'] = scope_capture_time
+                if not experiment_state.has_key('result_scope_time'):
+                    experiment_state['result_scope_time'] = scope_capture_time
 
                 if scope_result.has_key(result_key):
                     scope_result[result_key].append((scope_capture_in, scope_capture_out))
@@ -142,18 +144,24 @@ class PulseData(DataCapture):
 
         result_key_name = run_exp.get_result_key_name()
 
+        # Allocate fields in result dictionary
+        experiment_state['result_avg_length'] = []
+
         for name in result_key_name:
             experiment_state[name] = []
 
-        for result_key, scope_capture_set in scope_result.iterkeys():
+        # Average across data sets in each bin
+        for result_key, scope_capture_set in scope_result.iteritems():
             scope_capture_in_array = numpy.array([x[0] for x in scope_capture_set])
             experiment_in_result.append(numpy.mean(scope_capture_in_array, axis=0).tolist())
 
             scope_capture_out_array = numpy.array([x[1] for x in scope_capture_set])
             experiment_out_result.append(numpy.mean(scope_capture_out_array, axis=0).tolist())
 
-            for name, param in enumerate(result_key):
-                experiment_state[name].append(param)
+            experiment_state['result_avg_length'].append(numpy.size(scope_capture_in_array, axis=0))
+
+            for name_idx, param in enumerate(result_key):
+                experiment_state[result_key_name[name_idx]].append(param)
 
         experiment_state['result_scope_in'] = experiment_in_result
         experiment_state['result_scope_out'] = experiment_out_result
@@ -173,7 +181,7 @@ class VNAData(DataCapture):
 
         # Get configuration
         vna_address = self._cfg.get(self._CFG_SECTION, 'vna_address')
-        self._vna_setup_path_list = self._cfg.get(self._CFG_SECTION, 'setup').split(',')
+        self._vna_setup_path_list = self._cfg.get(self._CFG_SECTION, 'vna_setup').split(',')
 
         vna_connector = equipment.VISAConnector(vna_address)
         self._vna = equipment.NetworkAnalyzer(vna_connector)
@@ -184,8 +192,8 @@ class VNAData(DataCapture):
         if self._args.lock:
             self._vna.lock(True, True, False)
 
-    def save(self, n, capture_id, run_exp):
-        experiment_state = DataCapture._save_state(self, n, capture_id, run_exp)
+    def save(self, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
 
         # Capture VNA data
         snp_frequency_full = []
@@ -229,5 +237,34 @@ class VNAData(DataCapture):
         # Save to .mat file with state data
         self._save_mat('vna_mat', capture_id, experiment_state)
 
-class FrequencyCounterData(DataCapture):
-    pass
+class FrequencyData(DataCapture):
+    _CFG_SECTION = 'frequency'
+
+    def __init__(self, args, cfg, result_dir):
+        DataCapture.__init__(self, args, cfg, result_dir)
+
+        counter_address = cfg.get(self._CFG_SECTION, 'counter_address')
+        counter_impedance = equipment.FrequencyCounter.INPUT_IMPEDANCE.FIFTY if cfg.getboolean(self._CFG_SECTION, 'counter_50r') else equipment.FrequencyCounter.INPUT_IMPEDANCE.HIGH
+        counter_period = cfg.getfloat(self._CFG_SECTION, 'counter_period')
+        counter_average = cfg.getfloat(self._CFG_SECTION, 'counter_average')
+
+        # Connect to frequency counter
+        counter_connector = equipment.VISAConnector(counter_address)
+        self._counter = equipment.FrequencyCounter(counter_connector)
+
+        self._counter.reset()
+        self._counter.set_impedance(counter_impedance)
+        self._counter.set_measurement_time(counter_period)
+
+        if counter_average > 1:
+            self._counter.set_calculate_average(True, equipment.FrequencyCounter.AVERAGE_TYPE.MEAN, counter_average)
+
+    def save(self, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
+
+        # Get frequency from counter
+        self._counter.trigger()
+        self._counter.wait_measurement()
+        experiment_state['result_counter_frequency'] = self._counter.get_frequency()
+
+        self._save_mat('freq', capture_id, experiment_state)

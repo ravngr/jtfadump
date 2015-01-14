@@ -31,7 +31,7 @@ class InstrumentConnector:
 
 
 class VISAConnector(InstrumentConnector):
-    def __init__(self, address, term_chars=False, use_bus_address=False):
+    def __init__(self, address, term_chars=None, use_bus_address=False):
         InstrumentConnector.__init__(self, address)
 
         resource_manager = visa.ResourceManager()
@@ -43,7 +43,7 @@ class VISAConnector(InstrumentConnector):
         self._instrument = resource_manager.open_resource(address)
 
         # Specify termination character(s) if provided
-        if term_chars is not False:
+        if term_chars is not None:
             self._instrument.read_termination = term_chars
             self._instrument.write_termination = term_chars
 
@@ -52,7 +52,7 @@ class VISAConnector(InstrumentConnector):
         self._logger.info("{} Connected".format(self.get_address()))
 
     def select_bus_address(self, bus_address, force=False):
-        if self._use_bus_address and bus_address is not False:
+        if self._use_bus_address and bus_address is not None:
             if force or self._last_bus_address != bus_address:
                 self._logger.debug("{} Select bus address {}".format(self.get_address(), bus_address))
                 self._instrument.write("*ADR {}".format(bus_address))
@@ -62,40 +62,46 @@ class VISAConnector(InstrumentConnector):
                 # Wait
                 time.sleep(0.5)
 
-    def write(self, data, bus_address=False):
+    def write(self, data, bus_address=None):
         self.select_bus_address(bus_address)
         self._logger.debug("{} WRITE: {}".format(self.get_address(), data))
+
         self._instrument.write(data)
         
-    def write_raw(self, data, raw_data, bus_address=False):
+    def write_raw(self, data, raw_data, bus_address=None):
         self.select_bus_address(bus_address)
         self._logger.debug("{} WRITE RAW: {}({} bytes)".format(self.get_address(), data, len(raw_data)))
+
         self._instrument.write_binary_values(data, raw_data, datatype='c')
 
-    def query(self, data, bus_address=False, timeout=False):
+    def query(self, data, bus_address=None, timeout=False):
         orig_timeout = self._instrument.timeout
 
-        if type(timeout)is not bool:
+        if type(timeout) is not bool:
             self._instrument.timeout = timeout
 
         self.select_bus_address(bus_address)
         self._logger.debug("{} QUERY: {}".format(self.get_address(), data))
+
         response = self._instrument.query(data)
-        self._logger.debug("{} RESPONSE: {})".format(self.get_address(), response))
+
+        self._logger.debug("{} RESPONSE: {}".format(self.get_address(), response.rstrip()))
 
         self._instrument.timeout = orig_timeout
         return response
 
-    def query_raw(self, data, bus_address=False, timeout=False):
+    def query_raw(self, data, bus_address=None, timeout=None):
         orig_timeout = self._instrument.timeout
 
-        if type(timeout)is not bool:
+        if timeout is not None:
             self._instrument.timeout = timeout
 
         self.select_bus_address(bus_address)
         self._logger.debug("{} QUERY: {}".format(self.get_address(), data))
+
         self._instrument.write(data)
         response = self._instrument.read_raw()
+
         response_len = len(response)
         self._logger.debug("{} RESPONSE: {} byte{}".format(self.get_address(), response_len,
                                                                's' if response_len == 1 else ''))
@@ -155,6 +161,9 @@ class Instrument:
     def wait(self):
         self._connector.write("*WAI", self._bus_address)
 
+    def wait_measurement(self):
+        self._connector.query("*OPC?", self._bus_address, timeout=None)
+
     @staticmethod
     def _cast_bool(value):
         return "ON" if value else "OFF"
@@ -172,18 +181,37 @@ class InstrumentException(Exception):
 """Instrument definitions"""
 class FrequencyCounter(Instrument):
     INPUT_IMPEDANCE = util.enum(FIFTY='50', HIGH='1E6')
+    AVERAGE_TYPE = util.enum(MIN='MIN', MAX='MAX', MEAN='MEAN', STD_DEVIATION='SDEV')
 
-    def __init__(self, connector, bus_address = False):
+    def __init__(self, connector, bus_address=False):
         Instrument.__init__(self, connector, bus_address)
 
+        self._average = False
+
+    def trigger(self):
+        self._connector.write(":INIT")
+
     def get_frequency(self):
-        return float(self._connector.query(":READ?"))
+        if self._average:
+            return float(self._connector.query(":CALC:DATA?"))
+        else:
+            return float(self._connector.query(":READ?"))
 
     def set_measurement_time(self, secs):
         self._connector.write(":ACQ:APER {}".format(secs))
 
     def set_impedance(self, impedance):
         self._connector.write(":INP:IMP {}".format(impedance))
+
+    def set_calculate_average(self, enabled, type=None, count=128):
+        if enabled and count > 1 and type is not None:
+            self._connector.write(":CALC:AVER:COUN {}".format(count))
+            self._connector.write(":CALC:AVER:TYPE {}".format(type))
+            self._connector.write(":CALC:AVER:STAT ON")
+            self._average = True
+        else:
+            self._connector.write(":AVER:STAT OFF")
+            self._average = False
 
 
 class NetworkAnalyzer(Instrument):
@@ -277,9 +305,6 @@ class NetworkAnalyzer(Instrument):
     def is_ready(self):
         return self._connector.query(":SYST:TEMP")[0] is '1'
 
-    def wait_measurement(self):
-        self._connector.query("*OPC?", self._bus_address, timeout=None)
-
 
 class Oscilloscope(Instrument):
     _TIMEOUT_DEFAULT = 5.0
@@ -341,16 +366,16 @@ class Oscilloscope(Instrument):
         self._connector.write(":CHAN{}:LAB \"{}\"".format(channel, label))
 
     def set_channel_label_visible(self, visible):
-        self._connector.write(":DISP:LAB \"{}\"".format(self._cast_bool(visible)))
+        self._connector.write(":DISP:LAB {}".format(self._cast_bool(visible)))
 
     def set_channel_offset(self, channel, offset):
-        self._connector.write(":CHAN{}:OFFS \"{}\"".format(channel, offset))
+        self._connector.write(":CHAN{}:OFFS {}".format(channel, offset))
 
     def set_channel_scale(self, channel, scale):
-        self._connector.write(":CHAN{}:SCAL \"{}\"".format(channel, scale))
+        self._connector.write(":CHAN{}:SCAL {}".format(channel, scale))
 
     def set_channel_impedance(self, channel, impedance):
-        self._connector.write(":CHAN{}:IMP \"{}\"".format(channel, impedance))
+        self._connector.write(":CHAN{}:IMP {}".format(channel, impedance))
 
     # Run state
     def set_run_state(self, state):

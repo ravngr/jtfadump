@@ -1,5 +1,6 @@
 import argparse
 import ConfigParser
+import datetime
 import logging
 import os
 import pickle
@@ -155,28 +156,53 @@ def main():
     # Run the experiment
     try:
         with open(_LOOP_STATE_FILE, 'r') as f:
-            loop = pickle.load(f)
+            run_exp.set_remaining_loops(pickle.load(f))
             root_logger.info("Loaded existing loop counter from file")
     except:
-        loop = 0
+        root_logger.info("No existing state")
+
+    loop = 0
+    loop_runtime = []
 
     try:
         while run_exp.is_running():
-            capture_id = util.rand_hex_str()
-            root_logger.info("Experiment step {}: {}".format(loop, capture_id))
+            loop_start_time = time.time()
 
+            capture_id = util.rand_hex_str()
+            root_logger.info("Experiment step {} ({} remaining): {}".format(loop, run_exp.get_remaining_loops(), capture_id))
+
+            # Update experimental parameters
             run_exp.step()
-            run_data_capture.save(loop, capture_id, run_exp)
+
+            # Capture data from experiment
+            run_data_capture.save(capture_id, run_exp)
+            run_exp.finish_loop()
+
+            # Show time statistics
+            loop_time = time.time() - loop_start_time
+            loop_runtime.append(loop_time)
+
+            loop_time_avg = sum(loop_runtime) / len(loop_runtime)
+            loop_hours, r = divmod(loop_time_avg, 3600)
+            loop_mins, loop_secs = divmod(r, 60)
+
+            loop_est_maxtime = loop_time_avg * run_exp.get_remaining_loops()
+            loop_est = datetime.datetime.now() + datetime.timedelta(seconds=loop_est_maxtime)
+
+            root_logger.info("Average loop runtime: {}:{}:{}".format(int(loop_hours), int(loop_mins), round(loop_secs, 3)))
+            root_logger.info("Estimated completion {:%Y-%m-%d %H:%M:%S}".format(loop_est))
 
             loop += 1
 
             with open(_LOOP_STATE_FILE, 'w') as f:
-                pickle.dump(loop, f)
+                pickle.dump(run_exp.get_remaining_loops(), f)
 
         try:
             os.unlink(_LOOP_STATE_FILE)
         except:
             pass
+
+        root_logger.info('Experiment loop exited normally')
     except (KeyboardInterrupt, SystemExit):
         root_logger.exception('User terminated experiment', exc_info=True)
     except:
@@ -185,7 +211,13 @@ def main():
         if args.notify:
             notify.send_message("Exception occured during experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
     finally:
-        run_exp.stop()
+        try:
+            run_exp.stop()
+        except:
+            root_logger.exception('Error while stopping experiment', exc_info=True)
+
+            if args.notify:
+                notify.send_message("Exception occured while stopping experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
 
     root_logger.info('Experiment stopped')
 

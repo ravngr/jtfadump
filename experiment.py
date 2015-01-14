@@ -11,7 +11,17 @@ import pid
 import templogger
 
 
+class ExperimentException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return self.value
+
+
 class Experiment:
+    _CFG_SECTION = 'experiment'
+
     def __init__(self, args, cfg, result_dir):
         self._args = args
         self._cfg = cfg
@@ -19,7 +29,7 @@ class Experiment:
 
         self._logger = logging.getLogger(__name__)
 
-        self._running = True
+        self._experiment_loops = self._cfg.getint(Experiment._CFG_SECTION, 'max_loops')
 
     def step(self):
         raise NotImplementedError()
@@ -28,7 +38,16 @@ class Experiment:
         raise NotImplementedError()
 
     def is_running(self):
-        return self._running
+        return self._experiment_loops > 0
+
+    def get_remaining_loops(self):
+        return self._experiment_loops
+
+    def set_remaining_loops(self, remaining_loops):
+        self._experiment_loops = remaining_loops
+
+    def finish_loop(self):
+        self._experiment_loops -= 1
 
     def get_result_key(self):
         raise NotImplementedError()
@@ -46,30 +65,29 @@ class Experiment:
 
 
 class TemperatureExperiment(Experiment):
+    _CFG_SECTION = 'temperature'
     _STATE_FILE = 'temperature.pickle'
 
     def __init__(self, args, cfg, result_dir):
         Experiment.__init__(self, args, cfg, result_dir)
 
         # Experiment parameters and hardware addresses
-        self._temperature_min = float(self._cfg.get('temperature', 'temperature_min'))
-        self._temperature_max = float(self._cfg.get('temperature', 'temperature_max'))
-        self._temperature_step = float(self._cfg.get('temperature', 'temperature_step'))
+        self._temperature_min = self._cfg.getfloat(self._CFG_SECTION, 'temperature_min')
+        self._temperature_max = self._cfg.getfloat(self._CFG_SECTION, 'temperature_max')
+        self._temperature_step = self._cfg.getfloat(self._CFG_SECTION, 'temperature_step')
 
-        self._step_time = int(self._cfg.get('temperature', 'step_time'))
-
-        self._experiment_loops = int(self._cfg.get('temperature', 'max_loops'))
+        self._step_time = self._cfg.getint(self._CFG_SECTION, 'step_time')
 
         logger_port = self._cfg.get('temperature', 'logger_port')
-        logger_ambient_channel = int(self._cfg.get('temperature', 'logger_ambient_channel'))
-        logger_sensor_channel = int(self._cfg.get('temperature', 'logger_sensor_channel'))
+        logger_ambient_channel = self._cfg.getint(self._CFG_SECTION, 'logger_ambient_channel')
+        logger_sensor_channel = self._cfg.getint(self._CFG_SECTION, 'logger_sensor_channel')
 
-        supply_address = self._cfg.get('temperature', 'supply_address')
-        supply_bus_id = int(self._cfg.get('temperature', 'supply_bus_id'))
-        supply_limit = pid.Limit(float(self._cfg.get('temperature', 'voltage_min')), float(self._cfg.get('temperature', 'voltage_max')))
+        supply_address = self._cfg.get(self._CFG_SECTION, 'supply_address')
+        supply_bus_id = self._cfg.getint(self._CFG_SECTION, 'supply_bus_id')
+        supply_limit = pid.Limit(self._cfg.getfloat(self._CFG_SECTION, 'voltage_min'), self._cfg.getfloat(self._CFG_SECTION, 'voltage_max'))
 
-        pid_param = pid.ControllerParameters(float(self._cfg.get('temperature', 'pid_p')), float(self._cfg.get('temperature', 'pid_i')), float(self._cfg.get('temperature', 'pid_d')))
-        pid_period = float(self._cfg.get('temperature', 'pid_period'))
+        pid_param = pid.ControllerParameters(self._cfg.getfloat(self._CFG_SECTION, 'pid_p'), self._cfg.getfloat(self._CFG_SECTION, 'pid_i'), self._cfg.getfloat(self._CFG_SECTION, 'pid_d'))
+        pid_period = self._cfg.getfloat(self._CFG_SECTION, 'pid_period')
 
         # Reload experiment state
         try:
@@ -104,17 +122,23 @@ class TemperatureExperiment(Experiment):
         # Wait for temperature to stabilize
         resume_time = datetime.datetime.now() + datetime.timedelta(seconds=self._step_time)
         self._logger.info("Wait to {:%H:%M:%S}".format(resume_time))
-        time.sleep(self._step_time)
+
+        try:
+            time.sleep(self._step_time)
+        except (KeyboardInterrupt):
+            self._logger.info("Wait interrupted")
+            user_input = raw_input("Continue? ")
+            if not user_input.lower() in ['y', 'yes', 'true', '1']:
+                raise
+
+        # Check that the regulator is still working
+        if not self._temperature_regulator.is_running():
+            self._logger.error('Temperature regulator is not running')
+            raise self._temperature_regulator.get_controller_exception()
 
         # Update for next step
         if (self._temperature >= self._temperature_max and self._temperature_step > 0) or (self._temperature <= self._temperature_min and self._temperature_step < 0):
             self._temperature_step = -self._temperature_step
-
-            # End experiment when number of loops expires
-            self._experiment_loops -= 1
-
-            if self._experiment_loops == 0:
-                self._running = False
 
         self._temperature += self._temperature_step
 
@@ -130,12 +154,12 @@ class TemperatureExperiment(Experiment):
 
             self._temperature_regulator.lock_release()
         else:
-            key = (state['result_sensor_temperature'])
+            key = (state['sensor_temperature'],)
 
         return key
 
     def get_result_key_name(self):
-        return ('sensor_temperature')
+        return ('result_sensor_temperature',)
 
     def get_state(self, capture_id):
         parent_state = Experiment.get_state(self, capture_id)

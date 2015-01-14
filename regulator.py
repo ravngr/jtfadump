@@ -79,19 +79,27 @@ class TemperatureRegulator(Regulator):
     def get_target(self):
         return self._controller.get_target()
 
+    def is_running(self):
+        return self._controller.is_running()
+
+    def get_controller_exception(self):
+        return self._controller.get_thread_exception()
+
     def start(self):
-        if not self._controller.is_running():
+        if not self.is_running():
             self._power_supply.set_output_enable(True)
             self._controller.start()
 
     def stop(self):
-        if self._controller.is_running():
+        if self.is_running():
+            self._controller.lock_acquire()
             t = self.get_temperature()
+            self._controller.lock_release()
             self._controller.set_target(t)
 
             # Ramp down temperature if necessary
             if t > self._RAMP_THRESHOLD:
-                self._logger.warning(u"Temperature is over threshold, ramping temperature down to {}°C".format(t))
+                self._logger.warning(u"Temperature is over threshold, ramp temperature down to below {}°C".format(self._RAMP_THRESHOLD))
 
             while t >= self._RAMP_THRESHOLD:
                 t -= self._RAMP_SPEED / (60.0 / self._RAMP_INTERVAL)

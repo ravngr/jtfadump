@@ -1,3 +1,5 @@
+import Queue
+import sys
 import threading
 import time
 
@@ -47,6 +49,7 @@ class Controller:
         # Setup thread
         self._thread = threading.Thread(target=self._update)
         self._lock = threading.Lock()
+        self._thread_exception = Queue.Queue()
 
     def set_target(self, target):
         self._target = target
@@ -95,6 +98,9 @@ class Controller:
     def get_output_value(self):
         return self._output_value
 
+    def get_thread_exception(self):
+        return self._thread_exception.get(block=False)
+
     def lock_acquire(self):
         self._lock.acquire(True)
 
@@ -116,7 +122,7 @@ class Controller:
 
     def _update(self):
         try:
-            while True:
+            while self._running:
                 sample_start_time = time.time()
 
                 self._lock.acquire(True)
@@ -140,12 +146,11 @@ class Controller:
 
                 if st > 0:
                     time.sleep(st)
-
-                if not self._running:
-                    break
-        except():
-            # Set output to zero on exception
+        except:
+            # Set output to minimum on exception
+            self._thread_exception.put(sys.exc_info())
             self._output(self._limit.clamp(0))
+            self._running = False
             raise
 
 

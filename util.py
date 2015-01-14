@@ -3,6 +3,7 @@ import random
 import re
 import string
 from subprocess import Popen, PIPE
+import threading
 import sys
 
 # From http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
@@ -25,6 +26,7 @@ def rand_hex_str(length=8):
 def str2bool(s):
     return True if s.lower() in ['true', '1', 'yes', 'y'] else False
 
+# SNP file reading
 class SNPFormatException(Exception):
     def __init__(self, value):
         self.value = value
