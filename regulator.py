@@ -122,8 +122,19 @@ class TemperatureRegulator(Regulator):
         return self._power_supply.get_power()
 
     # Functions used by PID controller
-    def get_temperature(self, channel=None):
-        return self._temp_logger.get_temperature(channel or self._temp_logger_channel)
+    def get_temperature(self, channel=None, attempts=3):
+        while True:
+            try:
+                temperature = self._temp_logger.get_temperature(channel or self._temp_logger_channel)
+                return temperature
+            except:
+                attempts -= 1
+
+                if attempts == 0:
+                    raise
+
+                self._logger.exception("Failed to read temperature ({} attempt{} remaining)".format(attempts, '' if attempts == 1 else 's'), exc_info=True)
+
 
     def _set_voltage(self, voltage):
         if self._enabled:

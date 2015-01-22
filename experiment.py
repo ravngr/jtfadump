@@ -58,7 +58,9 @@ class Experiment:
     def get_state(self, capture_id):
         state = {
             'experiment': self.__class__.__name__,
-            'capture_id': capture_id
+            'capture_id': capture_id,
+            'capture_time': time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime()),
+            'capture_timestamp': time.time()
         }
         
         return state

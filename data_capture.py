@@ -246,7 +246,8 @@ class FrequencyData(DataCapture):
         counter_address = cfg.get(self._CFG_SECTION, 'counter_address')
         counter_impedance = equipment.FrequencyCounter.INPUT_IMPEDANCE.FIFTY if cfg.getboolean(self._CFG_SECTION, 'counter_50r') else equipment.FrequencyCounter.INPUT_IMPEDANCE.HIGH
         counter_period = cfg.getfloat(self._CFG_SECTION, 'counter_period')
-        counter_average = cfg.getfloat(self._CFG_SECTION, 'counter_average')
+        self._counter_average = cfg.getfloat(self._CFG_SECTION, 'counter_average')
+        self._counter_delay = cfg.getfloat(self._CFG_SECTION, 'counter_delay')
 
         # Connect to frequency counter
         counter_connector = equipment.VISAConnector(counter_address)
@@ -256,8 +257,8 @@ class FrequencyData(DataCapture):
         self._counter.set_impedance(counter_impedance)
         self._counter.set_measurement_time(counter_period)
 
-        if counter_average > 1:
-            self._counter.set_calculate_average(True, equipment.FrequencyCounter.AVERAGE_TYPE.MEAN, counter_average)
+        #if counter_average > 1:
+        #    self._counter.set_calculate_average(True, equipment.FrequencyCounter.AVERAGE_TYPE.MEAN, counter_average)
 
     def save(self, capture_id, run_exp):
         experiment_state = DataCapture._save_state(self, capture_id, run_exp)
@@ -265,6 +266,11 @@ class FrequencyData(DataCapture):
         # Get frequency from counter
         self._counter.trigger()
         self._counter.wait_measurement()
-        experiment_state['result_counter_frequency'] = self._counter.get_frequency()
+
+        experiment_state['result_counter_frequency'] = []
+
+        for run in range(self._counter_average):
+            time.sleep(self._counter_delay)
+            experiment_state['result_counter_frequency'].append(self._counter.get_frequency())
 
         self._save_mat('freq', capture_id, experiment_state)
