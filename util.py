@@ -20,6 +20,15 @@ def get_git_hash():
 def class_from_str(class_name, parent):
     return reduce(getattr, class_name.split('.'), sys.modules[parent])
 
+# From http://stackoverflow.com/questions/2400504/easiest-way-to-replace-a-string-using-a-dictionary-of-replacements
+def replace_dict(substite_dict, data):
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(key) for key in substite_dict.keys()) + r')\b')
+
+    if type(data) is list:
+        return [pattern.sub(lambda x: substite_dict[x.group()], d) for d in data]
+    else:
+        return pattern.sub(lambda x: substite_dict[x.group()], data)
+
 def rand_hex_str(length=8):
     return ''.join(random.choice(string.hexdigits[:16]) for x in range(length))
 

@@ -125,8 +125,7 @@ class TemperatureRegulator(Regulator):
     def get_temperature(self, channel=None, attempts=3):
         while True:
             try:
-                temperature = self._temp_logger.get_temperature(channel or self._temp_logger_channel)
-                return temperature
+                return self._temp_logger.get_temperature(channel or self._temp_logger_channel)
             except:
                 attempts -= 1
 

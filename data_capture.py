@@ -246,7 +246,7 @@ class FrequencyData(DataCapture):
         counter_address = cfg.get(self._CFG_SECTION, 'counter_address')
         counter_impedance = equipment.FrequencyCounter.INPUT_IMPEDANCE.FIFTY if cfg.getboolean(self._CFG_SECTION, 'counter_50r') else equipment.FrequencyCounter.INPUT_IMPEDANCE.HIGH
         counter_period = cfg.getfloat(self._CFG_SECTION, 'counter_period')
-        self._counter_average = cfg.getfloat(self._CFG_SECTION, 'counter_average')
+        self._counter_average = cfg.getint(self._CFG_SECTION, 'counter_average')
         self._counter_delay = cfg.getfloat(self._CFG_SECTION, 'counter_delay')
 
         # Connect to frequency counter
