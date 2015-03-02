@@ -124,12 +124,6 @@ def main():
     root_logger.debug("--- END CONFIGURATION LISTING ---")
 
 
-    # Setup notification if required
-    if args.notify:
-        notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
-        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture), title='jtfadump Started')
-
-
     # Setup experiment
     try:
         root_logger.info("Loading experiment: {}".format(args.experiment))
@@ -152,6 +146,12 @@ def main():
     # Make sure log file is written before beginning
     log_handle_file.flush()
 
+    
+    # Setup notification if required
+    if args.notify:
+        notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
+        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture), title='jtfadump Started')
+    
 
     # Run the experiment
     try:

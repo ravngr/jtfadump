@@ -50,6 +50,7 @@ class PulseData(DataCapture):
         DataCapture.__init__(self, args, cfg, result_dir)
 
         self._fail_threshold = self._cfg.getint(self._CFG_SECTION, 'fail_threshold')
+        self._save_raw = self._cfg.getboolean(self._CFG_SECTION, 'save_raw')
 
         scope_address = self._cfg.get(self._CFG_SECTION, 'scope_address')
 
@@ -107,6 +108,9 @@ class PulseData(DataCapture):
         fail_count = 0
         scope_result = {}
 
+        scope_result_raw_key = []
+        scope_result_raw = []
+
         # Take multiple captures for averaging
         for run in range(0, self._scope_avg):
             self._logger.info("Capture {} of {}".format(run + 1, self._scope_avg))
@@ -122,6 +126,10 @@ class PulseData(DataCapture):
 
                 if not experiment_state.has_key('result_scope_time'):
                     experiment_state['result_scope_time'] = scope_capture_time
+
+                if self._save_raw:
+                    scope_result_raw_key.append(result_key)
+                    scope_result_raw.append((scope_capture_in, scope_capture_out))
 
                 if scope_result.has_key(result_key):
                     scope_result[result_key].append((scope_capture_in, scope_capture_out))
@@ -162,6 +170,11 @@ class PulseData(DataCapture):
 
             for name_idx, param in enumerate(result_key):
                 experiment_state[result_key_name[name_idx]].append(param)
+
+        if self._save_raw:
+            experiment_state['result_scope_raw_key'] = scope_result_raw_key
+            experiment_state['result_scope_raw_in'] = [x[0] for x in scope_result_raw]
+            experiment_state['result_scope_raw_out'] = [x[1] for x in scope_result_raw]
 
         experiment_state['result_scope_in'] = experiment_in_result
         experiment_state['result_scope_out'] = experiment_out_result

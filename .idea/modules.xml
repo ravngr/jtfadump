@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/jtfadump.iml" filepath="$PROJECT_DIR$/.idea/jtfadump.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../../Tools/other/pica/.idea/pica.iml" filepath="$PROJECT_DIR$/../../../Tools/other/pica/.idea/pica.iml" />
       <module fileurl="file://$PROJECT_DIR$/../../../../../Development/pyrogram/.idea/pyrogram.iml" filepath="$PROJECT_DIR$/../../../../../Development/pyrogram/.idea/pyrogram.iml" />
       <module fileurl="file://$PROJECT_DIR$/../../../../../Development/testing_ground/.idea/testing_ground.iml" filepath="$PROJECT_DIR$/../../../../../Development/testing_ground/.idea/testing_ground.iml" />
     </modules>

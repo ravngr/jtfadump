@@ -6,6 +6,7 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="pyrogram" />
     <orderEntry type="module" module-name="testing_ground" />
+    <orderEntry type="module" module-name="pica" />
   </component>
 </module>
 
