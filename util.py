@@ -6,9 +6,11 @@ from subprocess import Popen, PIPE
 import threading
 import sys
 
+
 # From http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
 def enum(**enums):
     return type('Enum', (), enums)
+
 
 # From http://stackoverflow.com/questions/12826723/possible-to-extract-the-git-repo-revision-hash-via-python-code
 def get_git_hash():
@@ -16,9 +18,11 @@ def get_git_hash():
     (proc_out, _) = proc.communicate()
     return proc_out.strip()
 
+
 # From http://stackoverflow.com/questions/1176136/convert-string-to-python-class-object
 def class_from_str(class_name, parent):
     return reduce(getattr, class_name.split('.'), sys.modules[parent])
+
 
 # From http://stackoverflow.com/questions/2400504/easiest-way-to-replace-a-string-using-a-dictionary-of-replacements
 def replace_dict(substite_dict, data):
@@ -29,11 +33,14 @@ def replace_dict(substite_dict, data):
     else:
         return pattern.sub(lambda x: substite_dict[x.group()], data)
 
+
 def rand_hex_str(length=8):
     return ''.join(random.choice(string.hexdigits[:16]) for x in range(length))
 
+
 def str2bool(s):
     return True if s.lower() in ['true', '1', 'yes', 'y'] else False
+
 
 # SNP file reading
 class SNPFormatException(Exception):
@@ -43,7 +50,9 @@ class SNPFormatException(Exception):
     def __str__(self):
         return self.value
 
+
 _SNP_PARAMETER_TYPE = enum(S='S', Y='Y', Z='Z', G='G', H='H')
+
 
 def read_snp(snp_path):
     with open(snp_path, 'r') as f:

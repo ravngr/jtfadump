@@ -161,7 +161,7 @@ class TemperatureExperiment(Experiment):
         return key
 
     def get_result_key_name(self):
-        return ('result_sensor_temperature',)
+        return 'result_sensor_temperature',
 
     def get_state(self, capture_id):
         parent_state = Experiment.get_state(self, capture_id)

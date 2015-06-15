@@ -1,6 +1,7 @@
 import argparse
 import ConfigParser
 import datetime
+import inspect
 import logging
 import os
 import pickle
@@ -14,24 +15,50 @@ import pyvisa
 import data_capture
 import equipment
 import experiment
+import post_processor
 import regulator
 import templogger
 import util
 
 _LOOP_STATE_FILE = 'loop.pickle'
 
+
 def main():
     # Get start time
     start_time_str = time.strftime('%Y%m%d_%H%M%S')
 
 
+    # Get a list of available modules
+    module_list = 'Data cpature modules:\n'
+
+    for m in dir(data_capture):
+        m = util.class_from_str("data_capture.{}".format(m), __name__)
+        if m is not data_capture.DataCapture and inspect.isclass(m) and issubclass(m, data_capture.DataCapture):
+            module_list += "\t{}\n".format(str(m).split('.', 1)[-1])
+
+    module_list += '\nExperiment modules:\n'
+
+    for m in dir(experiment):
+        m = util.class_from_str("experiment.{}".format(m), __name__)
+        if m is not experiment.Experiment and inspect.isclass(m) and issubclass(m, experiment.Experiment):
+            module_list += "\t{}\n".format(str(m).split('.', 1)[-1])
+
+    module_list += '\nPost-processor modules:\n'
+
+    for m in dir(post_processor):
+        m = util.class_from_str("post_processor.{}".format(m), __name__)
+        if m is not post_processor.PostProcessor and inspect.isclass(m) and issubclass(m, post_processor.PostProcessor):
+            module_list += "\t{}\n".format(str(m).split('.', 1)[-1])
+
+
     # Parse command line arguments
-    parse = argparse.ArgumentParser(description='Experiment System')
+    parse = argparse.ArgumentParser(description='Experiment System', formatter_class=argparse.RawDescriptionHelpFormatter, epilog=module_list)
 
     parse.add_argument('experiment', help='Experiment class to run')
     parse.add_argument('capture', help='DataCapture class to run')
     parse.add_argument('config', help='Configuration file(s)', nargs='+')
 
+    parse.add_argument('-p', '--post', help='Option data post-processing class', dest='post', action='append')
     parse.add_argument('-v', help='Verbose output', dest='verbose', action='store_true')
     parse.add_argument('--dry-run', help='Run without regulating experiment conditions', dest='dry_run', action='store_true')
     parse.add_argument('--pushover', help='Send notifications using pushover service', dest='notify', action='store_true')
@@ -140,6 +167,23 @@ def main():
         run_data_capture = data_capture_class(args, cfg, result_dir)
     except:
         root_logger.exception('Exception while loading data capture class', exc_info=True)
+        run_exp.stop()
+        return
+
+    # Add post-processors
+    try:
+        if args.post is not None:
+            for post_class in args.post:
+                root_logger.info("Loading post-processor: {}".format(post_class))
+                post_processor_class = util.class_from_str("post_processor.{}".format(post_class), __name__)
+
+                if data_capture_class in post_processor_class.get_supported_data_capture():
+                    run_post_processor = post_processor_class(cfg)
+                    run_data_capture.add_post_processor(run_post_processor)
+                else:
+                    root_logger.warning("{} does not support data capture {}".format(post_class))
+    except:
+        root_logger.exception('Exception while loading post processor class', exc_info=True)
         run_exp.stop()
         return
 
