@@ -60,6 +60,7 @@ class PulseData(DataCapture):
         scope_ch_out_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_out_50r')
         scope_time_div = self._cfg.getfloat(self._CFG_SECTION, 'scope_time_div')
         scope_trig_level = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_level')
+        scope_trig_pol = self._cfg.getboolean(self._CFG_SECTION, 'scope_trig_pol')
 
         self._scope_avg = self._cfg.getint(self._CFG_SECTION, 'scope_avg')
 
@@ -79,7 +80,7 @@ class PulseData(DataCapture):
         self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
         self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
         self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
-        self._scope.set_trigger_edge_level(scope_trig_level)
+        self._scope.set_trigger_edge_level(scope_trig_level, polarity=self._scope.TRIGGER_POLARITY.POSITIVE if scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
 
         # Channels
         for ch in [self._scope_ch_in, self._scope_ch_out]:
