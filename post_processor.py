@@ -10,7 +10,7 @@ class PostProcessor:
         self._cfg = cfg
 
     @staticmethod
-    def get_supported_data_capture(self):
+    def get_supported_data_capture():
         raise NotImplementedError()
 
     def process(self, data):
