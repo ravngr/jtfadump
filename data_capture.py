@@ -17,8 +17,13 @@ class DataCapture:
 
         self._logger = logging.getLogger(__name__)
 
+        self._post_processing = []
+
     def save(self, capture_id, run_exp):
         raise NotImplementedError()
+
+    def add_post_processor(self, post_processor):
+        self._post_processing.append(post_processor)
 
     def _gen_file_name(self, prefix, extension, capture_id):
         return "{}_{}_{}.{}".format(prefix, time.strftime('%Y%m%d%H%M%S'), capture_id, extension)
@@ -38,9 +43,23 @@ class DataCapture:
         return experiment_state
 
     def _save_mat(self, prefix, capture_id, data):
+        for post in self._post_processing:
+            data = post.process(data)
+
         mat_path = os.path.join(self._result_dir, self._gen_file_name(prefix, 'mat', capture_id))
         sio.savemat(mat_path, data, do_compression=True)
         self._logger.info("MATLAB file created: {}".format(mat_path))
+
+
+class NullData(DataCapture):
+    def __init__(self, args, cfg, result_dir):
+        DataCapture.__init__(self, args, cfg, result_dir)
+
+    def save(self, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
+
+        # Save results to .mat file
+        self._save_mat('null_mat', capture_id, experiment_state)
 
 
 class PulseData(DataCapture):

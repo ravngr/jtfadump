@@ -161,7 +161,7 @@ class TemperatureExperiment(Experiment):
         return key
 
     def get_result_key_name(self):
-        return ('result_sensor_temperature',)
+        return 'result_sensor_temperature',
 
     def get_state(self, capture_id):
         parent_state = Experiment.get_state(self, capture_id)
@@ -189,3 +189,31 @@ class HumidityExperiment(Experiment):
 class ExposureExperiment(Experiment):
     def get_result_key_name(self):
         return ('sensor_temperature', 'sensor_analyte')
+
+
+class TimeExperiment(Experiment):
+    _CFG_SECTION = 'time'
+
+    def __init__(self, args, cfg, result_dir):
+        Experiment.__init__(self, args, cfg, result_dir)
+
+        self._step_time = self._cfg.getint(self._CFG_SECTION, 'step_time')
+
+    def step(self):
+        # Just sleep until next time increment
+        try:
+            time.sleep(self._step_time)
+        except KeyboardInterrupt:
+            self._logger.info("Wait interrupted")
+            user_input = raw_input("Continue? ")
+            if not user_input.lower() in ['y', 'yes', 'true', '1']:
+                raise
+
+    def stop(self):
+        pass
+
+    def get_result_key(self):
+        return 0
+
+    def get_result_key_name(self):
+        return 'result_n',
