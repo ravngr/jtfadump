@@ -178,7 +178,7 @@ def main():
                 post_processor_class = util.class_from_str("post_processor.{}".format(post_class), __name__)
 
                 if data_capture_class in post_processor_class.get_supported_data_capture():
-                    run_post_processor = post_processor_class(cfg)
+                    run_post_processor = post_processor_class(run_exp, run_data_capture, cfg)
                     run_data_capture.add_post_processor(run_post_processor)
                 else:
                     root_logger.warning("{} does not support data capture {}".format(post_class))
