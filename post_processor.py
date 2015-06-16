@@ -1,3 +1,5 @@
+# -- coding: utf-8 --
+
 import matplotlib.pyplot as plt
 
 import data_capture
@@ -26,7 +28,7 @@ class ScopeSignalProcessor(PostProcessor):
 
         self._scope_fig, self._scope_axes = plt.subplots(2, sharex=True)
 
-        self._scope_axes[0].set_title('Oscilloscope Signals')
+        self._scope_axes[0].set_title('Signals')
 
         self._scope_axes[1].set_xlabel('Time (us)')
         self._scope_axes[0].set_ylabel('Input Signal (V)')
@@ -37,12 +39,14 @@ class ScopeSignalProcessor(PostProcessor):
         plt.show()
 
     @staticmethod
-    def get_supported_data_capture(self):
+    def get_supported_data_capture():
         return data_capture.PulseData,
 
     def process(self, data):
         time = data['result_scope_time']
-        scope = (data['result_scope_in'], data['result_scope_out'])
+        scope = (data['result_scope_in'][0], data['result_scope_out'][0])
+
+        self._scope_axes[0].set_title("Signals {} ({:.2f}°C)".format(data['capture_id'], data['sensor_temperature']))
 
         for line in [1, 2]:
             if self._scope_axes_line[line] is None:
