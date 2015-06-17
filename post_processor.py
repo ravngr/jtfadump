@@ -31,10 +31,10 @@ class ScopeSignalProcessor(PostProcessor):
         self._scope_axes[0].set_title('Signals')
 
         self._scope_axes[1].set_xlabel('Time (us)')
-        self._scope_axes[0].set_ylabel('Input Signal (V)')
-        self._scope_axes[1].set_ylabel('Output Signal (V)')
+        self._scope_axes[0].set_ylabel('Input Signal (mV)')
+        self._scope_axes[1].set_ylabel('Output Signal (mV)')
 
-        self._scope_axes_line = (None, None)
+        self._scope_axes_line = [None, None]
 
         plt.show()
 
@@ -43,14 +43,14 @@ class ScopeSignalProcessor(PostProcessor):
         return data_capture.PulseData,
 
     def process(self, data):
-        time = data['result_scope_time']
-        scope = (data['result_scope_in'][0], data['result_scope_out'][0])
+        time = [x * 1000000 for x in data['result_scope_time']]
+        scope = ([x * 1000 for x in data['result_scope_in'][0]], [x * 1000 for x in data['result_scope_out'][0]])
 
-        self._scope_axes[0].set_title("Signals {} ({:.2f}°C)".format(data['capture_id'], data['sensor_temperature']))
+        self._scope_axes[0].set_title("Signals {}".format(data['capture_id']))
 
-        for line in [1, 2]:
+        for line in [0, 1]:
             if self._scope_axes_line[line] is None:
-                self._scope_axes_line[line] = self._scope_axes[line].plot(time, scope[line])
+                self._scope_axes_line[line], = self._scope_axes[line].plot(time, scope[line])
             else:
                 self._scope_axes_line[line].set_ydata(scope[line])
 

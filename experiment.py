@@ -49,7 +49,7 @@ class Experiment:
     def finish_loop(self):
         self._experiment_loops -= 1
 
-    def get_result_key(self):
+    def get_result_key(self, state=None):
         raise NotImplementedError()
 
     def get_result_key_name(self):
@@ -152,11 +152,11 @@ class TemperatureExperiment(Experiment):
         if not state:
             self._temperature_regulator.lock_acquire()
 
-            key = (self._temperature_regulator.get_temperature())
+            key = self._temperature_regulator.get_temperature(),
 
             self._temperature_regulator.lock_release()
         else:
-            key = (state['sensor_temperature'],)
+            key = state['sensor_temperature'],
 
         return key
 
@@ -212,8 +212,8 @@ class TimeExperiment(Experiment):
     def stop(self):
         pass
 
-    def get_result_key(self):
-        return 0
+    def get_result_key(self, state=None):
+        return 0,
 
     def get_result_key_name(self):
         return 'result_n',
