@@ -45,7 +45,7 @@ class MKSField:
             return [0.0] * self.valid_length
         elif self.data_type is self.DATA_TYPE_RELAY:
             return [False] * self.valid_length * self._RELAY_OUTPUTS
-        elif self.data_type is self.DATA_TYPE_RELAY:
+        elif self.data_type is self.DATA_TYPE_TIME:
             return 0
         else:
             raise NotImplementedError()
@@ -107,7 +107,8 @@ class MKSField:
                     for bit in relay_seg:
                         relay_state.append(bit is '1')
 
-            return relay_state
+            # Reverse fields since we read left to right
+            return relay_state[::-1]
         elif self.data_type is self.DATA_TYPE_TIME:
             return time.mktime(time.strptime(data_fields[0], self._TIME_FORMAT))
         else:
@@ -138,8 +139,8 @@ class MKSSerialMonitor:
         MKSField('vgen_temperature', 1, data_type=MKSField.DATA_TYPE_FLOAT),
         MKSField('pressure', 1, save=False),
         MKSField('jcs', 3, save=False),
-        MKSField('dynacal_temperature', 1, save=False),
-        MKSField('adam', 8, save=False)
+        MKSField('dynacal_temperature', 1, data_type=MKSField.DATA_TYPE_FLOAT, save=False),
+        MKSField('adam', 8, data_type=MKSField.DATA_TYPE_FLOAT, save=False)
     ]
 
     _MKS_FIELD_LENGTH = sum([x.length for x in _MKS_FIELD_MAPPING])
@@ -152,7 +153,7 @@ class MKSSerialMonitor:
 
         # Generate export fields with default values
         self._export_fields = {
-            x.name: x.get_default() for x in self._MKS_FIELD_MAPPING
+            x.name: x.get_default() for x in self._MKS_FIELD_MAPPING if x.save
         }
 
         self._logger.debug('Setting up receiver for MKS system')
@@ -163,7 +164,7 @@ class MKSSerialMonitor:
         self._logger.info('Waiting for first MKS packet...')
 
         # Wait for end of packet before reading full packets
-        while self._port.read() is not '\n':
+         while self._port.read() != '\n':
             pass
 
         self._logger.info('MKS packet received!')
@@ -237,7 +238,7 @@ class MKSSerialMonitor:
 
                 # Check for end of line
                 if len(c) > 0:
-                    if c is self._MKS_EOL:
+                    if c == self._MKS_EOL:
                         # Process line
                         self._logger.debug("MKS packet: {}".format(line_buffer))
 
