@@ -138,7 +138,7 @@ class Controller:
 
                 self._lock.release()
                 
-                #print "IN: {}, OUT: {}".format(input_current, self._output_value)
+                # print "IN: {}, OUT: {}".format(input_current, self._output_value)
 
                 self._input_prev = input_current
 

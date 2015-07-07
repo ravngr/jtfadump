@@ -6,16 +6,21 @@ import struct
 
 
 class TemperatureLogger:
+    _SERIAL_SPEED = 9600
+    _SERIAL_TIMEOUT = 1
+
     _PAYLOAD_REQUEST = 'A'
     _PAYLOAD_SIZE = 45
     _PAYLOAD_DATA_OFFSET_LOW = 7
     _PAYLOAD_DATA_OFFSET_HIGH = 9
 
     def __init__(self, port):
-        # Open serial port
-        self._port = serial.Serial(port, 9600, timeout=1)
-
         self._logger = logging.getLogger(__name__)
+
+        self._logger.debug(u"Connecting temperature logger on COM{} at {}bps".format(port, self._SERIAL_SPEED))
+
+        # Open serial port
+        self._port = serial.Serial(port, self._SERIAL_SPEED, timeout=self._SERIAL_TIMEOUT)
 
     def get_temperature(self, channel=0):
         # Logger returns data when prompted with 'A' character
