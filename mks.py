@@ -149,27 +149,18 @@ class MKSSerialMonitor:
     _MKS_DELIMITER = '\t'
 
     def __init__(self, port):
+        self._port_name = port
         self._logger = logging.getLogger(__name__)
+        
+        self._logger.debug('Setting up receiver for MKS system')
 
         # Generate export fields with default values
         self._export_fields = {
             x.name: x.get_default() for x in self._MKS_FIELD_MAPPING if x.save
         }
 
-        self._logger.debug('Setting up receiver for MKS system')
-
-        # Open monitor port
-        self._port = serial.Serial(port, self._SERIAL_SPEED, timeout=self._SERIAL_TIMEOUT)
-
-        self._logger.info('Waiting for first MKS packet...')
-
-        # Wait for end of packet before reading full packets
-         while self._port.read() != '\n':
-            pass
-
-        self._logger.info('MKS packet received!')
-
         # Start receiver thread
+        self._working = threading.Event()
         self._stop = threading.Event()
         self._lock = threading.Lock()
 
@@ -232,6 +223,20 @@ class MKSSerialMonitor:
         line_buffer = ''
 
         try:
+            # Open monitor port
+            self._port = serial.Serial(self._port_name, self._SERIAL_SPEED, timeout=self._SERIAL_TIMEOUT)
+
+            self._logger.info('Waiting for first MKS packet...')
+
+            # Wait for end of packet before reading full packets
+            while self._port.read() != '\n':
+                pass
+
+            # Unblock any waiting threads
+            self._working.set()
+
+            self._logger.info('MKS packet received!')
+
             while not self._stop.is_set():
                 # Read byte
                 c = self._port.read()
@@ -259,5 +264,6 @@ class MKSSerialMonitor:
                         line_buffer += c
         except:
             self._stop.set()
+            self._working.clear()
             self._logger.exception('Exception occurred in MKS thread', exc_info=True)
             raise
