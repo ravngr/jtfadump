@@ -130,7 +130,7 @@ class MKSSerialMonitor:
     # Mapping of delimited data to export fields
     _MKS_FIELD_PREFIX = 'mks_'
     _MKS_FIELD_MAPPING = [
-        MKSField('time', 1, data_type=MKSField.DATA_TYPE_TIME),
+        MKSField('controller_time', 1, data_type=MKSField.DATA_TYPE_TIME),
         MKSField('loop_time', 1, data_type=MKSField.DATA_TYPE_INT),
         MKSField('relay', 1, data_type=MKSField.DATA_TYPE_RELAY),
         MKSField('power_supply', 1, save=False),
@@ -159,29 +159,50 @@ class MKSSerialMonitor:
             x.name: x.get_default() for x in self._MKS_FIELD_MAPPING if x.save
         }
 
+        # Append initial time information
+        self._export_fields.update({
+            self._MKS_FIELD_PREFIX + 'time': time.strftime('%a, %d %b %Y %H:%M:%S +0000', 0),
+            self._MKS_FIELD_PREFIX + 'timestamp': 0
+        })
+
         # Start receiver thread
+        self._update = threading.Event()
         self._working = threading.Event()
         self._stop = threading.Event()
         self._lock = threading.Lock()
 
         self._thread = threading.Thread(target=self._receive)
+        self._thread.daemon = True
 
         self._thread.start()
 
-    def stop(self):
+    def stop(self, wait=False):
         self._stop.set()
+
+        if wait:
+            self._thread.join()
 
     def is_running(self):
         return not self._stop.is_set()
 
+    def is_working(self):
+        return self._working.is_set()
+
+    def update_wait(self, timeout=None):
+        self._update.clear()
+        return self._update.wait(timeout)
+
     def get_state(self):
-        self._lock.acquire()
-
-        r = self._export_fields
-
-        self._lock.release()
+        with self._lock:
+            r = self._export_fields
 
         return r
+
+    def get_lag(self):
+        with self._lock:
+            lag = time.time() - self._export_fields[self._MKS_FIELD_PREFIX + 'timestamp']
+
+        return lag
 
     @staticmethod
     def process_mks_line(line):
@@ -191,7 +212,8 @@ class MKSSerialMonitor:
         line_fields = line.split(MKSSerialMonitor._MKS_DELIMITER)
 
         if len(line_fields) is not MKSSerialMonitor._MKS_FIELD_LENGTH:
-            raise MKSException("Expected {} fields but got {}".format(MKSSerialMonitor._MKS_FIELD_LENGTH, len(line_fields)))
+            raise MKSException("Expected {} fields but got {}".format(MKSSerialMonitor._MKS_FIELD_LENGTH,
+                                                                      len(line_fields)))
 
         for field_n in range(0, len(MKSSerialMonitor._MKS_FIELD_MAPPING)):
             # Get field
@@ -250,16 +272,21 @@ class MKSSerialMonitor:
                         try:
                             export_fields = MKSSerialMonitor.process_mks_line(line_buffer)
 
-                            self._lock.acquire(True)
+                            # Append current time
+                            export_fields[self._MKS_FIELD_PREFIX + 'time'] = time.strftime(
+                                '%a, %d %b %Y %H:%M:%S +0000', time.gmtime())
+                            export_fields[self._MKS_FIELD_PREFIX + 'timestamp'] = time.time()
 
-                            self._export_fields = export_fields
-
-                            self._lock.release()
+                            with self._lock:
+                                self._export_fields = export_fields
                         except MKSException as e:
                             self._logger.warn(e.msg)
 
                         # Clear buffer for next line
                         line_buffer = ''
+
+                        # Wake all waiting threads
+                        self._update.set()
                     else:
                         line_buffer += c
         except:

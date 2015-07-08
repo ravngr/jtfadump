@@ -6,8 +6,8 @@ import time
 import datetime
 
 import equipment
-import regulator
 import pid
+import regulator
 import templogger
 
 
@@ -217,3 +217,14 @@ class TimeExperiment(Experiment):
 
     def get_result_key_name(self):
         return 'result_n',
+
+
+class InfiniteExperiment(TimeExperiment):
+    def __init__(self, args, cfg, result_dir):
+        Experiment.__init__(self, args, cfg, result_dir)
+
+    def get_remaining_loops(self):
+        return float("inf")
+
+    def is_running(self):
+        return True

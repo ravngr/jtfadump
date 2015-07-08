@@ -6,6 +6,7 @@ import time
 import numpy
 import scipy.io as sio
 
+import mks
 import util
 
 
@@ -25,14 +26,15 @@ class DataCapture:
     def add_post_processor(self, post_processor):
         self._post_processing.append(post_processor)
 
-    def _gen_file_name(self, prefix, extension, capture_id):
+    @staticmethod
+    def _gen_file_name(prefix, extension, capture_id):
         return "{}_{}_{}.{}".format(prefix, time.strftime('%Y%m%d%H%M%S'), capture_id, extension)
 
     def _save_state(self, capture_id, run_exp):
         experiment_state = run_exp.get_state(capture_id)
         experiment_state['data_capture'] = self.__class__.__name__
 
-        txt_path = os.path.join(self._result_dir, self._gen_file_name('cap', 'txt', capture_id))
+        txt_path = os.path.join(self._result_dir, DataCapture._gen_file_name('cap', 'txt', capture_id))
 
         with open(txt_path, 'w') as f:
             for key, value in experiment_state.iteritems():
@@ -46,7 +48,7 @@ class DataCapture:
         for post in self._post_processing:
             data = post.process(data)
 
-        mat_path = os.path.join(self._result_dir, self._gen_file_name(prefix, 'mat', capture_id))
+        mat_path = os.path.join(self._result_dir, DataCapture._gen_file_name(prefix, 'mat', capture_id))
         sio.savemat(mat_path, data, do_compression=True)
         self._logger.info("MATLAB file created: {}".format(mat_path))
 
@@ -144,14 +146,14 @@ class PulseData(DataCapture):
                 scope_capture_in = [x[3] for x in scope_capture[0]]
                 scope_capture_out = [x[3] for x in scope_capture[1]]
 
-                if not experiment_state.has_key('result_scope_time'):
+                if 'result_scope_time' not in experiment_state:
                     experiment_state['result_scope_time'] = scope_capture_time
 
                 if self._save_raw:
                     scope_result_raw_key.append(result_key)
                     scope_result_raw.append((scope_capture_in, scope_capture_out))
 
-                if scope_result.has_key(result_key):
+                if result_key in scope_result:
                     scope_result[result_key].append((scope_capture_in, scope_capture_out))
                 else:
                     scope_result[result_key] = [(scope_capture_in, scope_capture_out)]
@@ -162,9 +164,11 @@ class PulseData(DataCapture):
                     self._logger.error("Capture failure limit exceeded")
                     raise
                 else:
-                    self._logger.exception("Exception during capture ({} of {} allowed)".format(fail_count, self._fail_threshold))
+                    self._logger.exception("Exception during capture ({} of {} allowed)".format(fail_count,
+                                                                                                self._fail_threshold))
 
-        self._logger.info("Capture complete, {} bin{} created".format(len(scope_result), '' if len(scope_result) == 1 else 's'))
+        self._logger.info("Capture complete, {} bin{} created".format(len(scope_result),
+                                                                      '' if len(scope_result) == 1 else 's'))
 
         # Combine results based off sensor temperature
         experiment_in_result = []
@@ -208,7 +212,6 @@ class VNAData(DataCapture):
     _PATH_DATA = 'experiment.s2p'
     _PATH_STATE = 'experiment.sta'
 
-    #, vna_connector, vna_setup_path
     def __init__(self, args, cfg, result_dir):
         DataCapture.__init__(self, args, cfg, result_dir)
 
@@ -219,7 +222,7 @@ class VNAData(DataCapture):
         vna_connector = equipment.VISAConnector(vna_address)
         self._vna = equipment.NetworkAnalyzer(vna_connector)
 
-        #self._vna.reset()
+        # self._vna.reset()
 
         # Lock the front panel
         if self._args.lock:
@@ -234,7 +237,8 @@ class VNAData(DataCapture):
 
         for vna_setup_path in self._vna_setup_path_list:
             vna_setup_name = os.path.splitext(os.path.basename(vna_setup_path))[0]
-            snp_path = os.path.join(self._result_dir, self._gen_file_name("vna_snp_{}".format(vna_setup_name), 's2p', capture_id))
+            snp_path = os.path.join(self._result_dir, self._gen_file_name("vna_snp_{}".format(vna_setup_name), 's2p',
+                                                                          capture_id))
 
             # Transfer setup file to VNA and then load it
             self._vna.file_transfer(vna_setup_path, self._PATH_STATE, True)
@@ -270,6 +274,7 @@ class VNAData(DataCapture):
         # Save to .mat file with state data
         self._save_mat('vna_mat', capture_id, experiment_state)
 
+
 class FrequencyData(DataCapture):
     _CFG_SECTION = 'frequency'
 
@@ -290,7 +295,7 @@ class FrequencyData(DataCapture):
         self._counter.set_impedance(counter_impedance)
         self._counter.set_measurement_time(counter_period)
 
-        #if counter_average > 1:
+        # if counter_average > 1:
         #    self._counter.set_calculate_average(True, equipment.FrequencyCounter.AVERAGE_TYPE.MEAN, counter_average)
 
     def save(self, capture_id, run_exp):
@@ -307,3 +312,33 @@ class FrequencyData(DataCapture):
             experiment_state['result_counter_frequency'].append(self._counter.get_frequency())
 
         self._save_mat('freq', capture_id, experiment_state)
+
+
+class MKSData(DataCapture):
+    _CFG_SECTION = 'mks'
+
+    def __init__(self, args, cfg, result_dir):
+        DataCapture.__init__(self, args, cfg, result_dir)
+
+        mks_port = self._cfg.get(self._CFG_SECTION, 'port')
+        self._expiry = self._cfg.get(self._CFG_SECTION, 'expiry')
+        self._timeout = self._cfg.get(self._CFG_SECTION, 'timeout')
+
+        # Connect to MKS
+        self._mks = mks.MKSSerialMonitor(mks_port)
+
+    def save(self, capture_id, run_exp):
+        # If data is too old then wait for an update
+        if self._mks.get_lag() > self._expiry:
+            self._logger.info('Waiting for MKS update')
+
+            if not self._mks.update_wait(self._timeout):
+                raise mks.MKSException('MKS timed out')
+
+        # Get existing experiment data
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
+
+        # Append MKS data
+        experiment_state.update(self._mks.get_state())
+
+        self._save_mat('mks', capture_id, experiment_state)
