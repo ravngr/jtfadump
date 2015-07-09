@@ -1,8 +1,11 @@
 # -- coding: utf-8 --
 
+import logging
+
 import matplotlib.pyplot as plt
 
 import data_capture
+import mks
 
 
 class PostProcessor:
@@ -10,6 +13,8 @@ class PostProcessor:
         self._run_experiment = run_experiment
         self._run_data_capture = run_data_capture
         self._cfg = cfg
+
+        self._logger = logging.getLogger(__name__)
 
     @staticmethod
     def get_supported_data_capture():
@@ -55,5 +60,35 @@ class ScopeSignalProcessor(PostProcessor):
                 self._scope_axes_line[line].set_ydata(scope[line])
 
         self._scope_fig.canvas.draw()
+
+        return data
+
+
+class MKSMonitorPostProcessor(PostProcessor):
+    _CFG_SECTION = 'mks'
+
+    def __init__(self, run_experiment, run_data_capture, cfg):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
+
+        mks_port = self._cfg.get(self._CFG_SECTION, 'port')
+        self._expiry = self._cfg.get(self._CFG_SECTION, 'expiry')
+        self._timeout = self._cfg.get(self._CFG_SECTION, 'timeout')
+
+        # Connect to MKS
+        self._mks = mks.MKSSerialMonitor(mks_port)
+
+    @staticmethod
+    def get_supported_data_capture():
+        return data_capture.PulseData,
+
+    def process(self, data):
+        # If data is too old then wait for an update
+        if self._mks.get_lag() > self._expiry:
+            self._logger.info('Waiting for MKS update')
+
+            if not self._mks.update_wait(self._timeout):
+                raise mks.MKSException('MKS timed out')
+
+        data.update(self._mks.get_state())
 
         return data
