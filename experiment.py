@@ -29,7 +29,11 @@ class Experiment:
 
         self._logger = logging.getLogger(__name__)
 
-        self._experiment_loops = self._cfg.getint(Experiment._CFG_SECTION, 'max_loops')
+        if 'max_loops' in [x[0] for x in cfg.items(self._CFG_SECTION)]:
+            self._experiment_loops = self._cfg.getint(self._CFG_SECTION, 'max_loops')
+        else:
+            self._experiment_loops = None
+        
 
     def step(self):
         raise NotImplementedError()
@@ -38,16 +42,23 @@ class Experiment:
         raise NotImplementedError()
 
     def is_running(self):
+        if self._experiment_loops is None:
+            return True
+    
         return self._experiment_loops > 0
 
     def get_remaining_loops(self):
+        if self._experiment_loops is None:
+            return False
+    
         return self._experiment_loops
 
     def set_remaining_loops(self, remaining_loops):
         self._experiment_loops = remaining_loops
 
     def finish_loop(self):
-        self._experiment_loops -= 1
+        if self._experiment_loops is not None:
+            self._experiment_loops -= 1
 
     def get_result_key(self, state=None):
         raise NotImplementedError()
@@ -77,6 +88,8 @@ class TemperatureExperiment(Experiment):
         self._temperature_min = self._cfg.getfloat(self._CFG_SECTION, 'temperature_min')
         self._temperature_max = self._cfg.getfloat(self._CFG_SECTION, 'temperature_max')
         self._temperature_step = self._cfg.getfloat(self._CFG_SECTION, 'temperature_step')
+        self._temperature_repeat = self._cfg.getfloat(self._CFG_SECTION, 'temperature_repeat')
+        self._temperature_n = 0
 
         self._step_time = self._cfg.getint(self._CFG_SECTION, 'step_time')
 
@@ -112,14 +125,20 @@ class TemperatureExperiment(Experiment):
         self._temperature_regulator = regulator.TemperatureRegulator(logger, logger_sensor_channel, supply, pid_param, pid_period, supply_limit)
 
     def step(self):
-        # Set temperature
-        self._logger.info(u"Target temperature: {}°C".format(self._temperature))
-        self._temperature_regulator.set_target(self._temperature)
-        self._temperature_regulator.start()
+        self._temperature_n -= 1
+    
+        if self._temperature_n <= 0:
+            # Set temperature
+            self._logger.info(u"Target temperature: {}°C".format(self._temperature))
+            self._temperature_regulator.set_target(self._temperature)
+            self._temperature_regulator.start()
 
-        # Save current state
-        with open(self._STATE_FILE, 'w') as f:
-            pickle.dump((self._temperature, self._temperature_step), f)
+            # Save current state
+            with open(self._STATE_FILE, 'w') as f:
+                pickle.dump((self._temperature, self._temperature_step), f)
+                
+            self._temperature_n = self._temperature_repeat
+            
 
         # Wait for temperature to stabilize
         resume_time = datetime.datetime.now() + datetime.timedelta(seconds=self._step_time)
@@ -222,9 +241,5 @@ class TimeExperiment(Experiment):
 class InfiniteExperiment(TimeExperiment):
     def __init__(self, args, cfg, result_dir):
         TimeExperiment.__init__(self, args, cfg, result_dir)
-
-    def get_remaining_loops(self):
-        return False
-
-    def is_running(self):
-        return True
+        
+        self._experiment_loops = None
