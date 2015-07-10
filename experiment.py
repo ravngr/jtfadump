@@ -221,10 +221,10 @@ class TimeExperiment(Experiment):
 
 class InfiniteExperiment(TimeExperiment):
     def __init__(self, args, cfg, result_dir):
-        Experiment.__init__(self, args, cfg, result_dir)
+        TimeExperiment.__init__(self, args, cfg, result_dir)
 
     def get_remaining_loops(self):
-        return float("inf")
+        return False
 
     def is_running(self):
         return True

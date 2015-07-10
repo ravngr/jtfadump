@@ -321,8 +321,8 @@ class MKSData(DataCapture):
         DataCapture.__init__(self, args, cfg, result_dir)
 
         mks_port = self._cfg.get(self._CFG_SECTION, 'port')
-        self._expiry = self._cfg.get(self._CFG_SECTION, 'expiry')
-        self._timeout = self._cfg.get(self._CFG_SECTION, 'timeout')
+        self._expiry = self._cfg.getfloat(self._CFG_SECTION, 'expiry')
+        self._timeout = self._cfg.getfloat(self._CFG_SECTION, 'timeout')
 
         # Connect to MKS
         self._mks = mks.MKSSerialMonitor(mks_port)

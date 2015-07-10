@@ -15,6 +15,7 @@ import pyvisa
 import data_capture
 import equipment
 import experiment
+import mks
 import post_processor
 import regulator
 import templogger
@@ -119,9 +120,10 @@ def main():
     experiment_logger = logging.getLogger(experiment.__name__)
     regulator_logger = logging.getLogger(regulator.__name__)
     temperature_logger = logging.getLogger(templogger.__name__)
+    mks_logger = logging.getLogger(mks.__name__)
 
     # Set defaults
-    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger]:
+    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger, mks_logger]:
         logger.handlers = []
         logger.setLevel(logging.DEBUG)
         logger.addHandler(log_handle_console)
@@ -230,11 +232,12 @@ def main():
             loop_hours, r = divmod(loop_time_avg, 3600)
             loop_mins, loop_secs = divmod(r, 60)
 
-            loop_est_maxtime = loop_time_avg * run_exp.get_remaining_loops()
-            loop_est = datetime.datetime.now() + datetime.timedelta(seconds=loop_est_maxtime)
+            if run_exp.get_remaining_loops() is not False:
+                loop_est_maxtime = loop_time_avg * run_exp.get_remaining_loops()
+                loop_est = datetime.datetime.now() + datetime.timedelta(seconds=loop_est_maxtime)
 
-            root_logger.info("Average loop runtime: {}:{}:{}".format(int(loop_hours), int(loop_mins), round(loop_secs, 3)))
-            root_logger.info("Estimated completion {:%Y-%m-%d %H:%M:%S}".format(loop_est))
+                root_logger.info("Average loop runtime: {}:{}:{}".format(int(loop_hours), int(loop_mins), round(loop_secs, 3)))
+                root_logger.info("Estimated completion {:%Y-%m-%d %H:%M:%S}".format(loop_est))
 
             loop += 1
 
@@ -247,6 +250,9 @@ def main():
             pass
 
         root_logger.info('Experiment loop exited normally')
+        
+        if args.notify:
+            notify.send_message("Experiment stopped normally after {} loop{}".format(loop, '' if loop == 1 else 's'), title='jtfadump Stopped')
     except (KeyboardInterrupt, SystemExit):
         root_logger.exception('User terminated experiment', exc_info=True)
     except:
@@ -263,10 +269,7 @@ def main():
             if args.notify:
                 notify.send_message("Exception occured while stopping experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
 
-    root_logger.info('Experiment stopped')
-
-    if args.notify:
-        notify.send_message("Experiment stopped after {} loop{}".format(loop, '' if loop == 1 else 's'), title='jtfadump Stopped')
+    root_logger.info('jtfadump exiting')
 
 
 if __name__ == "__main__":
