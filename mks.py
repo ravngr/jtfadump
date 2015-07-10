@@ -130,7 +130,7 @@ class MKSSerialMonitor:
     # Mapping of delimited data to export fields
     _MKS_FIELD_PREFIX = 'mks_'
     _MKS_FIELD_MAPPING = [
-        MKSField('controller_time', 1, data_type=MKSField.DATA_TYPE_TIME),
+        MKSField('controller_timestamp', 1, data_type=MKSField.DATA_TYPE_TIME),
         MKSField('loop_time', 1, data_type=MKSField.DATA_TYPE_INT),
         MKSField('relay', 1, data_type=MKSField.DATA_TYPE_RELAY),
         MKSField('power_supply', 1, save=False),
@@ -161,7 +161,7 @@ class MKSSerialMonitor:
 
         # Append initial time information
         self._export_fields.update({
-            self._MKS_FIELD_PREFIX + 'time': time.strftime('%a, %d %b %Y %H:%M:%S +0000', 0),
+            self._MKS_FIELD_PREFIX + 'time': time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(0)),
             self._MKS_FIELD_PREFIX + 'timestamp': 0
         })
 
@@ -276,6 +276,8 @@ class MKSSerialMonitor:
                             export_fields[self._MKS_FIELD_PREFIX + 'time'] = time.strftime(
                                 '%a, %d %b %Y %H:%M:%S +0000', time.gmtime())
                             export_fields[self._MKS_FIELD_PREFIX + 'timestamp'] = time.time()
+                            
+                            self._logger.debug(export_fields)
 
                             with self._lock:
                                 self._export_fields = export_fields
