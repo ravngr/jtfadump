@@ -55,6 +55,7 @@ def main():
     # Parse command line arguments
     parse = argparse.ArgumentParser(description='Experiment System', formatter_class=argparse.RawDescriptionHelpFormatter, epilog=module_list)
 
+    parse.add_argument('name', help='Name for experiment (prefix for resulrs folder)')
     parse.add_argument('experiment', help='Experiment class to run')
     parse.add_argument('capture', help='DataCapture class to run')
     parse.add_argument('config', help='Configuration file(s)', nargs='+')
@@ -80,16 +81,6 @@ def main():
 
 
     # Check paths
-    log_dir = cfg.get('path', 'log')
-
-    if not os.path.isdir(log_dir):
-        raise IOError('Log path is not a directory')
-
-    if not os.access(log_dir, os.W_OK):
-        raise IOError('Log path is not writable')
-
-    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % (start_time_str))
-
     result_dir = cfg.get('path', 'result')
 
     if not os.path.isdir(result_dir):
@@ -98,7 +89,23 @@ def main():
     if not os.access(result_dir, os.W_OK):
         raise IOError('Result path is not writable')
 
-    result_dir = os.path.realpath(os.path.join(result_dir, "experiment_{}".format(start_time_str)))
+    result_dir = os.path.realpath(os.path.join(result_dir, '_'.join([args.name, start_time_str])))
+
+    # Log file can be defined in seperate path, but defaults to the results directory
+    if 'log' in [x[0] for x in cfg.items('path')]:
+        log_dir = cfg.get('path', 'log')
+
+        if not os.path.isdir(log_dir):
+            raise IOError('Log path is not a directory')
+
+        if not os.access(log_dir, os.W_OK):
+            raise IOError('Log path is not writable')
+    else:
+        # Save log in results folder
+        log_dir = result_dir
+
+    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % (start_time_str))
+
     os.mkdir(result_dir)
 
 
