@@ -58,3 +58,7 @@ target/
 
 # PyCharm
 /.idea/workspace.xml
+
+# Runtime configuration
+*.cfg
+
