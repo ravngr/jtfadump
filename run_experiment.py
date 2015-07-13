@@ -128,9 +128,10 @@ def main():
     regulator_logger = logging.getLogger(regulator.__name__)
     temperature_logger = logging.getLogger(templogger.__name__)
     mks_logger = logging.getLogger(mks.__name__)
+    post_processor_logger = logging.getLogger(post_processor.__name__)
 
     # Set defaults
-    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger, mks_logger]:
+    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger, mks_logger, post_processor_logger]:
         logger.handlers = []
         logger.setLevel(logging.DEBUG)
         logger.addHandler(log_handle_console)

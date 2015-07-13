@@ -54,7 +54,8 @@ class Experiment:
         return self._experiment_loops
 
     def set_remaining_loops(self, remaining_loops):
-        self._experiment_loops = remaining_loops
+        if self._experiment_loops is not None:
+            self._experiment_loops = remaining_loops
 
     def finish_loop(self):
         if self._experiment_loops is not None:

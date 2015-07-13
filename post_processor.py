@@ -29,7 +29,7 @@ class ScopeSignalProcessor(PostProcessor):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
 
         # Setup axes
-        plt.ion()
+        # plt.ion()
 
         self._scope_fig, self._scope_axes = plt.subplots(2, sharex=True)
 
@@ -41,7 +41,7 @@ class ScopeSignalProcessor(PostProcessor):
 
         self._scope_axes_line = [None, None]
 
-        plt.show()
+        plt.show(block=False)
 
     @staticmethod
     def get_supported_data_capture():
@@ -60,6 +60,7 @@ class ScopeSignalProcessor(PostProcessor):
                 self._scope_axes_line[line].set_ydata(scope[line])
 
         self._scope_fig.canvas.draw()
+        plt.pause(0.001)
 
         return data
 
@@ -71,8 +72,8 @@ class MKSMonitorPostProcessor(PostProcessor):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
 
         mks_port = self._cfg.get(self._CFG_SECTION, 'port')
-        self._expiry = self._cfg.get(self._CFG_SECTION, 'expiry')
-        self._timeout = self._cfg.get(self._CFG_SECTION, 'timeout')
+        self._expiry = self._cfg.getfloat(self._CFG_SECTION, 'expiry')
+        self._timeout = self._cfg.getfloat(self._CFG_SECTION, 'timeout')
 
         # Connect to MKS
         self._mks = mks.MKSSerialMonitor(mks_port)
@@ -84,7 +85,7 @@ class MKSMonitorPostProcessor(PostProcessor):
     def process(self, data):
         # If data is too old then wait for an update
         if self._mks.get_lag() > self._expiry:
-            self._logger.info('Waiting for MKS update')
+            self._logger.warn('Waiting for MKS update')
 
             if not self._mks.update_wait(self._timeout):
                 raise mks.MKSException('MKS timed out')

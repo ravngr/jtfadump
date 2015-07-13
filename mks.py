@@ -140,7 +140,8 @@ class MKSSerialMonitor:
         MKSField('pressure', 1, save=False),
         MKSField('jcs', 3, save=False),
         MKSField('dynacal_temperature', 1, data_type=MKSField.DATA_TYPE_FLOAT, save=False),
-        MKSField('adam', 8, data_type=MKSField.DATA_TYPE_FLOAT, save=False)
+        MKSField('adam', 8, data_type=MKSField.DATA_TYPE_FLOAT, save=False),
+        MKSField('vgen_rtd', 2, data_type=MKSField.DATA_TYPE_FLOAT)
     ]
 
     _MKS_FIELD_LENGTH = sum([x.length for x in _MKS_FIELD_MAPPING])
@@ -281,14 +282,14 @@ class MKSSerialMonitor:
 
                             with self._lock:
                                 self._export_fields = export_fields
+                                
+                            # Wake all waiting threads
+                            self._update.set()
                         except MKSException as e:
                             self._logger.warn(e.msg)
 
                         # Clear buffer for next line
                         line_buffer = ''
-
-                        # Wake all waiting threads
-                        self._update.set()
                     else:
                         line_buffer += c
         except:
