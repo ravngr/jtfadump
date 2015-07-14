@@ -12,6 +12,7 @@ import traceback
 import pushover
 import pyvisa
 
+import colorlog
 import data_capture
 import equipment
 import experiment
@@ -27,7 +28,6 @@ _LOOP_STATE_FILE = 'loop.pickle'
 def main():
     # Get start time
     start_time_str = time.strftime('%Y%m%d_%H%M%S')
-
 
     # Get a list of available modules
     module_list = 'Data cpature modules:\n'
@@ -51,9 +51,9 @@ def main():
         if m is not post_processor.PostProcessor and inspect.isclass(m) and issubclass(m, post_processor.PostProcessor):
             module_list += "\t{}\n".format(str(m).split('.', 1)[-1])
 
-
     # Parse command line arguments
-    parse = argparse.ArgumentParser(description='Experiment System', formatter_class=argparse.RawDescriptionHelpFormatter, epilog=module_list)
+    parse = argparse.ArgumentParser(description='Experiment System',
+                                    formatter_class=argparse.RawDescriptionHelpFormatter, epilog=module_list)
 
     parse.add_argument('name', help='Name for experiment (prefix for resulrs folder)')
     parse.add_argument('experiment', help='Experiment class to run')
@@ -62,8 +62,10 @@ def main():
 
     parse.add_argument('-p', '--post', help='Option data post-processing class', dest='post', action='append')
     parse.add_argument('-v', help='Verbose output', dest='verbose', action='store_true')
-    parse.add_argument('--dry-run', help='Run without regulating experiment conditions', dest='dry_run', action='store_true')
-    parse.add_argument('--pushover', help='Send notifications using pushover service', dest='notify', action='store_true')
+    parse.add_argument('--dry-run', help='Run without regulating experiment conditions', dest='dry_run',
+                       action='store_true')
+    parse.add_argument('--pushover', help='Send notifications using pushover service', dest='notify',
+                       action='store_true')
     parse.add_argument('--lock', help='Lock the front panels of test equipment', dest='lock', action='store_true')
     parse.add_argument('--visa', help='Display VISA traffic in console', dest='visa', action='store_true')
     parse.set_defaults(verbose=False)
@@ -74,11 +76,9 @@ def main():
 
     args = parse.parse_args()
 
-
     # Read configuration file(s)
     cfg = ConfigParser.RawConfigParser()
     cfg.read(args.config)
-
 
     # Check paths
     result_dir = cfg.get('path', 'result')
@@ -108,16 +108,18 @@ def main():
 
     os.mkdir(result_dir)
 
-
     # Setup logging
-    log_handle_console = logging.StreamHandler()
+    # log_handle_console = logging.StreamHandler()
+    log_handle_console = colorlog.ColorizingStreamHandler(sys.stdout)
     log_handle_console.setLevel(logging.DEBUG if args.verbose else logging.INFO)
-    log_format_console = logging.Formatter(fmt='%(asctime)s [%(levelname)-5s] %(name)s: %(message)s', datefmt='%H:%M:%S')
+    log_format_console = logging.Formatter(fmt='%(asctime)s [%(levelname)-5s] %(name)s: %(message)s',
+                                           datefmt='%H:%M:%S')
     log_handle_console.setFormatter(log_format_console)
 
     log_handle_file = logging.FileHandler(log_file_path)
     log_handle_file.setLevel(logging.DEBUG)
-    log_format_file = logging.Formatter(fmt='%(asctime)s [%(levelname)s] %(name)s: %(message)s', datefmt='%Y%m%d %H:%M:%S')
+    log_format_file = logging.Formatter(fmt='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                                        datefmt='%Y%m%d %H:%M:%S')
     log_handle_file.setFormatter(log_format_file)
 
     # Get all loggers needed
@@ -131,7 +133,8 @@ def main():
     post_processor_logger = logging.getLogger(post_processor.__name__)
 
     # Set defaults
-    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger, mks_logger, post_processor_logger]:
+    for logger in [root_logger, data_logger, equipment_logger, experiment_logger, regulator_logger, temperature_logger,
+                   mks_logger, post_processor_logger]:
         logger.handlers = []
         logger.setLevel(logging.DEBUG)
         logger.addHandler(log_handle_console)
@@ -205,7 +208,8 @@ def main():
     # Setup notification if required
     if args.notify:
         notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
-        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture), title='jtfadump Started')
+        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture),
+                            title='jtfadump Started')
     
 
     # Run the experiment
@@ -224,7 +228,8 @@ def main():
             loop_start_time = time.time()
 
             capture_id = util.rand_hex_str()
-            root_logger.info("Experiment step {} ({} remaining): {}".format(loop, run_exp.get_remaining_loops(), capture_id))
+            root_logger.info("Experiment step {} ({} remaining): {}".format(loop, run_exp.get_remaining_loops(),
+                                                                            capture_id))
 
             # Update experimental parameters
             run_exp.step()
@@ -241,11 +246,13 @@ def main():
             loop_hours, r = divmod(loop_time_avg, 3600)
             loop_mins, loop_secs = divmod(r, 60)
 
+            root_logger.info("Average loop runtime: {}:{}:{}".format(int(loop_hours), int(loop_mins), round(loop_secs,
+                                                                                                            3)))
+
             if run_exp.get_remaining_loops() is not False:
                 loop_est_maxtime = loop_time_avg * run_exp.get_remaining_loops()
                 loop_est = datetime.datetime.now() + datetime.timedelta(seconds=loop_est_maxtime)
 
-                root_logger.info("Average loop runtime: {}:{}:{}".format(int(loop_hours), int(loop_mins), round(loop_secs, 3)))
                 root_logger.info("Estimated completion {:%Y-%m-%d %H:%M:%S}".format(loop_est))
 
             loop += 1
@@ -261,14 +268,16 @@ def main():
         root_logger.info('Experiment loop exited normally')
         
         if args.notify:
-            notify.send_message("Experiment stopped normally after {} loop{}".format(loop, '' if loop == 1 else 's'), title='jtfadump Stopped')
+            notify.send_message("Experiment stopped normally after {} loop{}".format(loop, '' if loop == 1 else 's'),
+                                title='jtfadump Stopped')
     except (KeyboardInterrupt, SystemExit):
         root_logger.exception('User terminated experiment', exc_info=True)
     except:
         root_logger.exception('Error while running experiment', exc_info=True)
 
         if args.notify:
-            notify.send_message("Exception occured during experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
+            notify.send_message("Exception occurred during experiment! Traceback:\n{}".format(traceback.format_exc()),
+                title='jtfadump Exception')
     finally:
         try:
             run_exp.stop()
@@ -276,7 +285,8 @@ def main():
             root_logger.exception('Error while stopping experiment', exc_info=True)
 
             if args.notify:
-                notify.send_message("Exception occured while stopping experiment! Traceback:\n{}".format(traceback.format_exc()), title='jtfadump Exception')
+                notify.send_message("Exception occurred while stopping experiment! Traceback:\n{}".format(
+                    traceback.format_exc()), title='jtfadump Exception')
 
     root_logger.info('jtfadump exiting')
 
