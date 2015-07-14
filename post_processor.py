@@ -90,6 +90,13 @@ class MKSMonitorPostProcessor(PostProcessor):
             if not self._mks.update_wait(self._timeout):
                 raise mks.MKSException('MKS timed out')
 
-        data.update(self._mks.get_state())
+        mks_state = self._mks.get_state()
+        
+        # Print to logging
+        self._logger.info("Recorded MKS Flow: {}sccm".format('sccm, '.join(str(x) for x in mks_state['mks_flow'])))
+        self._logger.info("Recorded VGen RTD: {}".format(', '.join(str(x) for x in mks_state['mks_vgen_rtd'])))
+        self._logger.info("Recorded VGen RH: {}%".format(str(mks_state['mks_vgen_relative_value'][0])))
+        
+        data.update(mks_state)
 
         return data
