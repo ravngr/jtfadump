@@ -141,10 +141,11 @@ def main():
         equipment_logger.removeHandler(log_handle_console)
         temperature_logger.removeHandler(log_handle_console)
 
-    root_logger.info("jtfadump | hash: {}".format(util.get_git_hash()))
+    root_logger.info("jtfadump | git hash: {}".format(util.get_git_hash()))
     root_logger.info("python {}".format(sys.version))
     root_logger.info("pyvisa {}".format(pyvisa.__version__))
     root_logger.info("Started: {}".format(time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime())))
+    root_logger.info("Launch command: {}".format(' '.join(sys.argv)))
     root_logger.info("Logging path: {}".format(log_file_path))
     root_logger.info("Result directory: {}".format(result_dir))
 
