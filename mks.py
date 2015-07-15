@@ -149,8 +149,9 @@ class MKSSerialMonitor:
     _MKS_EOL = '\n'
     _MKS_DELIMITER = '\t'
 
-    def __init__(self, port):
+    def __init__(self, port, lag_warning=None):
         self._port_name = port
+        self._lag_warning = lag_warning
         self._logger = logging.getLogger(__name__)
         
         self._logger.debug('Setting up receiver for MKS system')
@@ -255,6 +256,9 @@ class MKSSerialMonitor:
             while self._port.read() != '\n':
                 pass
 
+            # Start lag timer from end of previous frame
+            update_time = time.time()
+
             # Unblock any waiting threads
             self._working.set()
 
@@ -277,6 +281,15 @@ class MKSSerialMonitor:
                             export_fields[self._MKS_FIELD_PREFIX + 'time'] = time.strftime(
                                 '%a, %d %b %Y %H:%M:%S +0000', time.gmtime())
                             export_fields[self._MKS_FIELD_PREFIX + 'timestamp'] = time.time()
+
+                            # Check for MKS lag (caused by overload)
+                            lag = time.time() - update_time
+
+                            if self._lag_warning is not None and lag > self._lag_warning:
+                                self._logger.warn("MKS overload, {:.3f} second{} lag since previous update".format(
+                                    lag, 's' if lag is not 1 else ''))
+
+                            update_time = time.time()
                             
                             self._logger.debug(export_fields)
 
