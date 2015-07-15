@@ -127,6 +127,8 @@ class TemperatureExperiment(Experiment):
 
     def step(self):
         self._temperature_n -= 1
+
+        increment = False
     
         if self._temperature_n <= 0:
             # Set temperature
@@ -139,6 +141,8 @@ class TemperatureExperiment(Experiment):
                 pickle.dump((self._temperature, self._temperature_step), f)
                 
             self._temperature_n = self._temperature_repeat
+
+            increment = True
             
 
         # Wait for temperature to stabilize
@@ -147,7 +151,7 @@ class TemperatureExperiment(Experiment):
 
         try:
             time.sleep(self._step_time)
-        except (KeyboardInterrupt):
+        except KeyboardInterrupt:
             self._logger.info("Wait interrupted")
             user_input = raw_input("Continue? ")
             if not user_input.lower() in ['y', 'yes', 'true', '1']:
@@ -159,10 +163,11 @@ class TemperatureExperiment(Experiment):
             raise self._temperature_regulator.get_controller_exception()
 
         # Update for next step
-        if (self._temperature >= self._temperature_max and self._temperature_step > 0) or (self._temperature <= self._temperature_min and self._temperature_step < 0):
-            self._temperature_step = -self._temperature_step
+        if increment:
+            if (self._temperature >= self._temperature_max and self._temperature_step > 0) or (self._temperature <= self._temperature_min and self._temperature_step < 0):
+                self._temperature_step = -self._temperature_step
 
-        self._temperature += self._temperature_step
+            self._temperature += self._temperature_step
 
     def stop(self):
         self._logger.info("Stopping temperature regulator")
