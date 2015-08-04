@@ -103,7 +103,7 @@ class VISAConnector(InstrumentConnector):
 
         response_len = len(response)
         self._logger.debug("{} RESPONSE: {} byte{}".format(self.get_address(), response_len,
-                                                               's' if response_len == 1 else ''))
+                                                           's' if response_len == 1 else ''))
 
         self._instrument.timeout = orig_timeout
         return response
@@ -214,6 +214,9 @@ class FrequencyCounter(Instrument):
 
 
 class NetworkAnalyzer(Instrument):
+    CAL_SETUP = util.enum(RESPONSE_OPEN='OPEN', RESPONSE_SHORT='SHOR', RESPONS_THROUGH='THRU', FULL_1PORT='SOLT1',
+                          FULL_2PORT='SOLT2', FULL_3PORT='SOLT3', FULL_4PORT='SOLT4')
+    CAL_TYPE = util.enum(OPEN='OPEN', SHORT='SHOR', LOAD='LOAD', THROUGH='THRU', ISOLATION='ISOL')
     SNP_FORMAT = util.enum(AUTO='AUTO', LOGMAG_ANG='MA', LINMAG_ANG='DB', REAL_IMAG='RI')
 
     def __init__(self, connector):
@@ -228,6 +231,33 @@ class NetworkAnalyzer(Instrument):
         # Setup for single measurement
         self._connector.write(":INIT{}".format(channel))
         self.trigger()
+
+    def cal_calculate(self, channel=1):
+        self._connector.write(":SENS{}:CORR:COLL:SAVE".format(channel))
+
+    def cal_measure(self, cal_type, ports=None, channel=1):
+        if not ports:
+            if cal_type in [self.CAL_TYPE.OPEN, self.CAL_TYPE.SHORT, self.CAL_TYPE.LOAD]:
+                ports = '1'
+            elif cal_type in [self.CAL_TYPE.THROUGH, self.CAL_TYPE.ISOLATION]:
+                ports = '1,2'
+        else:
+            ports = ','.join(ports)
+
+        self._connector.write(":SENS{}:CORR:COLL:{} {}".format(channel, cal_type, ports))
+
+    def cal_setup(self, cal_setup, ports=None, channel=1):
+        if not ports:
+            if cal_setup in [self.CAL_SETUP.RESPONSE_OPEN, self.CAL_SETUP.RESPONSE_SHORT,
+                             self.CAL_SETUP.RESPONS_THROUGH]:
+                ports = '1'
+            elif cal_setup in [self.CAL_TYPE.FULL_1PORT, self.CAL_TYPE.FULL_2PORT, self.CAL_TYPE.FULL_3PORT,
+                               self.CAL_TYPE.FULL_4PORT]:
+                ports = '1,2'
+        else:
+            ports = ','.join(ports)
+
+        self._connector.write(":SENS{}:CORR:COLL:METH:{} {}".format(channel, cal_setup, ports))
 
     def data_save_snp(self, path, ports, snp_format=SNP_FORMAT.AUTO):
         port_count = len(ports)

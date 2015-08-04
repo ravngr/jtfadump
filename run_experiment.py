@@ -58,7 +58,7 @@ def main():
     parse = argparse.ArgumentParser(description='Experiment System',
                                     formatter_class=argparse.RawDescriptionHelpFormatter, epilog=module_list)
 
-    parse.add_argument('name', help='Name for experiment (prefix for resulrs folder)')
+    parse.add_argument('name', help='Name for experiment (prefix for results folder)')
     parse.add_argument('experiment', help='Experiment class to run')
     parse.add_argument('capture', help='DataCapture class to run')
     parse.add_argument('config', help='Configuration file(s)', nargs='+')

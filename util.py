@@ -1,9 +1,11 @@
+import code
 import math
 import random
 import re
 import string
 from subprocess import Popen, PIPE
 import threading
+import time
 import sys
 
 
@@ -35,11 +37,43 @@ def replace_dict(substite_dict, data):
 
 
 def rand_hex_str(length=8):
-    return ''.join(random.choice(string.hexdigits[:16]) for x in range(length))
+    return ''.join(random.choice(string.hexdigits[:16]) for _ in range(length))
 
 
 def str2bool(s):
     return True if s.lower() in ['true', '1', 'yes', 'y'] else False
+
+
+# From http://stackoverflow.com/questions/1395913/python-drop-into-repl-read-eval-print-loop
+def interact(scope):
+    code.interact(local=scope)
+
+
+def interruptable_sleep(seconds):
+    def _sleep_method(t, stop):
+        for t in range(t)[::-1]:
+            if stop.is_set():
+                break
+
+            sys.stdout.write("\rSleeping for {} sec{} ".format(t + 1, 's' if t is not 1 else ''))
+            sys.stdout.flush()
+
+            time.sleep(1)
+
+    sleep_stop = threading.Event()
+    sleep_thread = threading.Thread(target=_sleep_method, args=(seconds, sleep_stop, ))
+    sleep_thread.daemon = True
+
+    sleep_thread.start()
+
+    while sleep_thread.is_alive():
+        try:
+            sleep_thread.join(1)
+        except KeyboardInterrupt:
+            sleep_stop.set()
+            break
+
+    sys.stdout.write('\n')
 
 
 # SNP file reading
