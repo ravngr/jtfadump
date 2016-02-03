@@ -220,12 +220,12 @@ def main():
     
 
     # Run the experiment
-    try:
-        with open(_LOOP_STATE_FILE, 'r') as f:
-            run_exp.set_remaining_loops(pickle.load(f))
-            root_logger.info("Loaded existing loop counter from file")
-    except:
-        root_logger.info("No existing state")
+    #try:
+    #    with open(_LOOP_STATE_FILE, 'r') as f:
+    #        run_exp.set_remaining_loops(pickle.load(f))
+    #        root_logger.info("Loaded existing loop counter from file")
+    #except:
+    #    root_logger.info("No existing state")
 
     loop = 0
     loop_runtime = []

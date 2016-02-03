@@ -106,12 +106,13 @@ class TemperatureExperiment(Experiment):
         pid_period = self._cfg.getfloat(self._CFG_SECTION, 'pid_period')
 
         # Reload experiment state
-        try:
-            with open(self._STATE_FILE, 'r') as f:
-                self._temperature, self._temperature_step = pickle.load(f)
-            self._logger.info("Loaded existing experiment state from file")
-        except:
-            self._temperature = self._temperature_min
+        #try:
+        #    with open(self._STATE_FILE, 'r') as f:
+        #        self._temperature, self._temperature_step = pickle.load(f)
+        #    self._logger.info("Loaded existing experiment state from file")
+        #except:
+        #    self._temperature = self._temperature_min
+        self._temperature = self._temperature_min
 
         self._logger.info(u"Initial temperature: {}°C, step: {}°C".format(self._temperature, self._temperature_step))
 
