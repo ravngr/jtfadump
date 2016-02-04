@@ -8,6 +8,7 @@ import inspect
 import logging
 import os
 import pickle
+import requests
 import sys
 import time
 import traceback
@@ -211,17 +212,20 @@ def main():
     # Setup notification if required
     if args.notify:
         notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
-        notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture),
-                            title='jtfadump Started')
+        try:
+            notify.send_message("Experiment: {}\nData capture: {}".format(args.experiment, args.capture),
+                                title='jtfadump Started')
+        except requests.exceptions.ConnectionError:
+            root_logger.warning('Failed to send Pushover start notification')
     
 
     # Run the experiment
-    try:
-        with open(_LOOP_STATE_FILE, 'r') as f:
-            run_exp.set_remaining_loops(pickle.load(f))
-            root_logger.info("Loaded existing loop counter from file")
-    except:
-        root_logger.info("No existing state")
+    #try:
+    #    with open(_LOOP_STATE_FILE, 'r') as f:
+    #        run_exp.set_remaining_loops(pickle.load(f))
+    #        root_logger.info("Loaded existing loop counter from file")
+    #except:
+    #    root_logger.info("No existing state")
 
     loop = 0
     loop_runtime = []

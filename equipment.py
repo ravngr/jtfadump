@@ -337,7 +337,7 @@ class NetworkAnalyzer(Instrument):
 
 class Oscilloscope(Instrument):
     _TIMEOUT_DEFAULT = 5.0
-    _VOLTAGE_STEPS = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1 ]
+    _VOLTAGE_STEPS = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1e0 ]
 
     ALL_CHANNELS = 0
 
@@ -626,7 +626,7 @@ class Oscilloscope(Instrument):
                 raw_data = [x[1] for x in data]
 
                 #if 0 in raw_data or 1 in raw_data or 255 in raw_data:
-                if any((i in raw_data) for i in (0, 1, 255)):
+                if any((n in raw_data) for n in (0, 1, 255)):
                     # Over threshold, if previous data exists then return it, else change ranges
                     if type(return_data[i]) == list:
                         flags[i] = False
