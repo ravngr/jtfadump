@@ -519,6 +519,7 @@ class Oscilloscope(Instrument):
         self._connector.write(":WAV:SOUR {}{}".format(source, channel if channel >= 0 else ''))
 
         waveform_data = self._connector.query_raw(":WAV:DATA?")
+        
 
         if waveform_data[0] != '#':
             return []

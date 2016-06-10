@@ -73,56 +73,72 @@ class PulseData(DataCapture):
         self._fail_threshold = self._cfg.getint(self._CFG_SECTION, 'fail_threshold')
         self._save_raw = self._cfg.getboolean(self._CFG_SECTION, 'save_raw')
 
-        scope_address = self._cfg.get(self._CFG_SECTION, 'scope_address')
-
         self._scope_ch_in = self._cfg.getint(self._CFG_SECTION, 'scope_ch_in')
-        scope_ch_in_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_in_50r')
+        self._scope_ch_in_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_in_50r')
         self._scope_ch_out = self._cfg.getint(self._CFG_SECTION, 'scope_ch_out')
-        scope_ch_out_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_out_50r')
-        scope_time_div = self._cfg.getfloat(self._CFG_SECTION, 'scope_time_div')
-        scope_trig_level = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_level')
-        scope_trig_pol = self._cfg.getboolean(self._CFG_SECTION, 'scope_trig_pol')
+        self._scope_ch_out_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_out_50r')
+        self._scope_time_div = self._cfg.getfloat(self._CFG_SECTION, 'scope_time_div')
+        self._scope_trig_level = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_level')
+        self._scope_trig_pol = self._cfg.getboolean(self._CFG_SECTION, 'scope_trig_pol')
 
         self._scope_avg = self._cfg.getint(self._CFG_SECTION, 'scope_avg')
 
         # Connect to oscilloscope and prepare it for captures
-        scope_connector = equipment.VISAConnector(scope_address)
-        self._scope = equipment.Oscilloscope(scope_connector)
-
-        # Clear display
-        self._scope.reset()
-        self._scope.set_channel_enable(self._scope.ALL_CHANNELS, False)
-
-        # Time scale
-        self._scope.set_time_scale(scope_time_div)
-        self._scope.set_time_reference(self._scope.TIME_REFERENCE.LEFT)
-
-        # Triggering
-        self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
-        self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
-        self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
-        self._scope.set_trigger_edge_level(scope_trig_level, polarity=self._scope.TRIGGER_POLARITY.POSITIVE if scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
-
-        # Channels
-        for ch in [self._scope_ch_in, self._scope_ch_out]:
-            self._scope.set_channel_enable(ch, True)
-            self._scope.set_channel_atten(ch, 1)
-            self._scope.set_channel_coupling(ch, self._scope.CHANNEL_COUPLING.DC)
-
-        self._scope.set_channel_impedance(self._scope_ch_in, self._scope.CHANNEL_IMPEDANCE.FIFTY if scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
-        self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
-
-        # Channel labels
-        self._scope.set_channel_label_visible(True)
-        self._scope.set_channel_label(self._scope_ch_in, 'IN')
-        self._scope.set_channel_label(self._scope_ch_out, 'OUT')
-
-        # Setup fast waveform dumping
-        self._scope.setup_waveform_smart()
+        self._scope_address = self._cfg.get(self._CFG_SECTION, 'scope_address').split(',')
+        self._scope_init()
 
         # Lock the front panel
         if self._args.lock:
             self._scope.lock(True)
+    
+    def _scope_init(self):
+        flag = False
+    
+        for scope_address in self._scope_address:
+            try:
+                self._logger.warn("Initializing scope {}".format(scope_address))
+                
+                scope_connector = equipment.VISAConnector(scope_address)
+                self._scope = equipment.Oscilloscope(scope_connector)
+            
+                # Clear display
+                self._scope.reset()
+                self._scope.set_channel_enable(self._scope.ALL_CHANNELS, False)
+
+                # Time scale
+                self._scope.set_time_scale(self._scope_time_div)
+                self._scope.set_time_reference(self._scope.TIME_REFERENCE.LEFT)
+
+                # Triggering
+                self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
+                self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
+                self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
+                self._scope.set_trigger_edge_level(self._scope_trig_level, polarity=self._scope.TRIGGER_POLARITY.POSITIVE if self._scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
+
+                # Channels
+                for ch in [self._scope_ch_in, self._scope_ch_out]:
+                    self._scope.set_channel_enable(ch, True)
+                    self._scope.set_channel_atten(ch, 1)
+                    self._scope.set_channel_coupling(ch, self._scope.CHANNEL_COUPLING.DC)
+
+                self._scope.set_channel_impedance(self._scope_ch_in, self._scope.CHANNEL_IMPEDANCE.FIFTY if self._scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+                self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if self._scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+
+                # Channel labels
+                self._scope.set_channel_label_visible(True)
+                self._scope.set_channel_label(self._scope_ch_in, 'IN')
+                self._scope.set_channel_label(self._scope_ch_out, 'OUT')
+
+                # Setup fast waveform dumping
+                self._scope.setup_waveform_smart()
+                
+                flag = True
+                break
+            except:
+                self._logger.exception('Error while initializing scope', exc_info=True)
+            
+        if not flag:
+            raise Exception('Failed to initialize scope')
 
     def save(self, capture_id, run_exp):
         experiment_state = DataCapture._save_state(self, capture_id, run_exp)
@@ -166,6 +182,9 @@ class PulseData(DataCapture):
                 else:
                     self._logger.exception("Exception during capture ({} of {} allowed)".format(fail_count,
                                                                                                 self._fail_threshold))
+                    
+                    # Reset scope
+                    self._scope_init()
 
         self._logger.info("Capture complete, {} bin{} created".format(len(scope_result),
                                                                       '' if len(scope_result) == 1 else 's'))

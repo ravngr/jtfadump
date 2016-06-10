@@ -36,8 +36,8 @@ class Regulator:
 
 
 class TemperatureRegulator(Regulator):
-    _RAMP_THRESHOLD = 40.0
-    _RAMP_SPEED = 10.0
+    _RAMP_THRESHOLD = 60.0
+    _RAMP_SPEED = 3.0
     _RAMP_INTERVAL = 5.0
 
     def __init__(self, temp_logger, temp_logger_channel, power_supply, pid_param, pid_period, voltage_limit, pid_invert=False):
