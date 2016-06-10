@@ -33,7 +33,6 @@ class Experiment:
             self._experiment_loops = self._cfg.getint(self._CFG_SECTION, 'max_loops')
         else:
             self._experiment_loops = None
-        
 
     def step(self):
         raise NotImplementedError()
@@ -108,12 +107,12 @@ class TemperatureExperiment(Experiment):
         pid_period = self._cfg.getfloat(self._CFG_SECTION, 'pid_period')
 
         # Reload experiment state
-        #try:
-        #    with open(self._STATE_FILE, 'r') as f:
-        #        self._temperature, self._temperature_step = pickle.load(f)
-        #    self._logger.info("Loaded existing experiment state from file")
-        #except:
-        #    self._temperature = self._temperature_min
+        # try:
+        #     with open(self._STATE_FILE, 'r') as f:
+        #         self._temperature, self._temperature_step = pickle.load(f)
+        #     self._logger.info("Loaded existing experiment state from file")
+        # except:
+        #     self._temperature = self._temperature_min
         self._temperature = self._temperature_min
 
         self._logger.info(u"Initial temperature: {}°C, step: {}°C".format(self._temperature, self._temperature_step))
@@ -128,6 +127,9 @@ class TemperatureExperiment(Experiment):
         self._logger_sensor_channel = logger_sensor_channel
         self._temperature_regulator = regulator.TemperatureRegulator(logger, logger_sensor_channel, supply, pid_param,
                                                                      pid_period, supply_limit)
+
+        if self._cfg.has_option(self._CFG_SECTION, 'supply_enable'):
+            self._temperature_regulator.set_enabled(self._cfg.getboolean(self._CFG_SECTION, 'supply_enable'))
 
     def step(self):
         self._temperature_n -= 1
@@ -147,7 +149,6 @@ class TemperatureExperiment(Experiment):
             self._temperature_n = self._temperature_repeat
 
             increment = True
-            
 
         # Wait for temperature to stabilize
         resume_time = datetime.datetime.now() + datetime.timedelta(seconds=self._step_time)
@@ -209,16 +210,6 @@ class TemperatureExperiment(Experiment):
         self._temperature_regulator.lock_release()
 
         return dict(state.items() + parent_state.items())
-
-
-class HumidityExperiment(Experiment):
-    def get_result_key_name(self):
-        return ('sensor_temperature', 'sensor_humidity')
-
-
-class ExposureExperiment(Experiment):
-    def get_result_key_name(self):
-        return ('sensor_temperature', 'sensor_analyte')
 
 
 class TimeExperiment(Experiment):

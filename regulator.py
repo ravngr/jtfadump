@@ -28,12 +28,6 @@ class Regulator:
     def stop(self):
         raise NotImplementedError()
 
-    def state_save(self, path):
-        raise NotImplementedError()
-
-    def state_load(self, path):
-        raise NotImplementedError()
-
 
 class TemperatureRegulator(Regulator):
     _RAMP_THRESHOLD = 60.0
@@ -87,7 +81,9 @@ class TemperatureRegulator(Regulator):
 
     def start(self):
         if not self.is_running():
-            self._power_supply.set_output_enable(True)
+            if self._enabled:
+                self._power_supply.set_output_enable(True)
+
             self._controller.start()
 
     def stop(self):
@@ -99,7 +95,8 @@ class TemperatureRegulator(Regulator):
 
             # Ramp down temperature if necessary
             if t > self._RAMP_THRESHOLD:
-                self._logger.warning(u"Temperature is over threshold, ramp temperature down to below {}°C".format(self._RAMP_THRESHOLD))
+                self._logger.warning(u"Temperature is over threshold, ramp temperature down to below {}°C"
+                                     .format(self._RAMP_THRESHOLD))
 
             while t >= self._RAMP_THRESHOLD:
                 t -= self._RAMP_SPEED / (60.0 / self._RAMP_INTERVAL)
@@ -109,7 +106,10 @@ class TemperatureRegulator(Regulator):
 
             self._controller.stop()
             self._controller.lock_acquire()
-            self._power_supply.set_output_enable(False)
+
+            if self._enabled:
+                self._power_supply.set_output_enable(False)
+
             self._controller.lock_release()
 
     def get_current(self):
@@ -132,7 +132,8 @@ class TemperatureRegulator(Regulator):
                 if attempts == 0:
                     raise
 
-                self._logger.exception("Failed to read temperature ({} attempt{} remaining)".format(attempts, '' if attempts == 1 else 's'), exc_info=True)
+                self._logger.exception("Failed to read temperature ({} attempt{} remaining)"
+                                       .format(attempts, '' if attempts == 1 else 's'), exc_info=True)
 
     def _set_voltage(self, voltage):
         if self._enabled:
