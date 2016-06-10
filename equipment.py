@@ -7,8 +7,8 @@ import visa
 import util
 
 
-"""Base class for instrument connectors"""
 class InstrumentConnector:
+    """Base class for instrument connectors"""
     def __init__(self, address):
         self._address = address
         self._logger = logging.getLogger(__name__)
@@ -168,8 +168,8 @@ class Instrument:
         return "ON" if value else "OFF"
 
 
-""" Instrument exceptions"""
 class InstrumentException(Exception):
+    """ Instrument exceptions"""
     def __init__(self, value):
         self.value = value
 
@@ -178,6 +178,8 @@ class InstrumentException(Exception):
 
 
 """Instrument definitions"""
+
+
 class FrequencyCounter(Instrument):
     INPUT_IMPEDANCE = util.enum(FIFTY='50', HIGH='1E6')
     AVERAGE_TYPE = util.enum(MIN='MIN', MAX='MAX', MEAN='MEAN', STD_DEVIATION='SDEV')
@@ -202,10 +204,10 @@ class FrequencyCounter(Instrument):
     def set_impedance(self, impedance):
         self._connector.write(":INP:IMP {}".format(impedance))
 
-    def set_calculate_average(self, enabled, type=None, count=128):
-        if enabled and count > 1 and type is not None:
+    def set_calculate_average(self, enabled, average_type=None, count=128):
+        if enabled and count > 1 and average_type is not None:
             self._connector.write(":CALC:AVER:COUN {}".format(count))
-            self._connector.write(":CALC:AVER:TYPE {}".format(type))
+            self._connector.write(":CALC:AVER:TYPE {}".format(average_type))
             self._connector.write(":CALC:AVER:STAT ON")
             self._average = True
         else:
@@ -289,8 +291,8 @@ class NetworkAnalyzer(Instrument):
         return data[data_start:(data_start + data_size)]
 
     def file_write(self, path, data):
-        #size = len(data)
-        #prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
+        # size = len(data)
+        # prefix = "#" + str(int(math.ceil(math.log10(size)))) + str(size)
         self._connector.write_raw(":MMEM:TRAN \"{}\",".format(path), data)
 
     def file_transfer(self, local_path, remote_path, to_vna):
@@ -337,7 +339,7 @@ class NetworkAnalyzer(Instrument):
 
 class Oscilloscope(Instrument):
     _TIMEOUT_DEFAULT = 5.0
-    _VOLTAGE_STEPS = [ 5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1e0 ]
+    _VOLTAGE_STEPS = [5e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2e-1, 5e-1, 1e0]
 
     ALL_CHANNELS = 0
 
@@ -348,13 +350,15 @@ class Oscilloscope(Instrument):
     RUN_STATE = util.enum(RUN='RUN', STOP='STOP', SINGLE='SING')
     TIME_MODE = util.enum(MAIN='MAIN', WINDOW='WIND', XY='XY', ROLL='ROLL')
     TIME_REFERENCE = util.enum(LEFT='LEFT', CENTER='CENTER', RIGHT='RIGHT')
-    TRIGGER_MODE = util.enum(EDGE='EDGE', GLITCH='GLIT', PATTERN='PATT', TV='TV', DELAY='DEL', EBURST='EBUR', OR='OR', RUNT='RUNT', SHOLD='SHOL', TRANSITION='TRAN', SBUS_1='SBUS1', SBUS_2='SBUS2', USB='USB')
+    TRIGGER_MODE = util.enum(EDGE='EDGE', GLITCH='GLIT', PATTERN='PATT', TV='TV', DELAY='DEL', EBURST='EBUR', OR='OR',
+                             RUNT='RUNT', SHOLD='SHOL', TRANSITION='TRAN', SBUS_1='SBUS1', SBUS_2='SBUS2', USB='USB')
     TRIGGER_SWEEP = util.enum(AUTO='AUTO', NORMAL='NORM')
     TRIGGER_SOURCE = util.enum(CHANNEL='CHAN', DIGITAL='DIG', EXTERNAL='EXT', LINE='LINE', WAVE_GEN='WGEN')
     TRIGGER_POLARITY = util.enum(POSITIVE='POS', NEGATIVE='NEG', EITHER='EITH', ALTERNATE='ALT')
     TRIGGER_QUALIFIER = util.enum(GREATER='GRE', LESSER='LESS', RANGE='RANG')
     WAVEFORM_FORMAT = util.enum(BYTE='BYTE', WORD='WORD')
-    WAVEFORM_SOURCE = util.enum(CHANNEL='CHAN', POD='POD', BUS='BUS', FUNCTION='FUNC', MATH='MATH', WAVE_MEM='WMEM', SBUS='SBUS')
+    WAVEFORM_SOURCE = util.enum(CHANNEL='CHAN', POD='POD', BUS='BUS', FUNCTION='FUNC', MATH='MATH', WAVE_MEM='WMEM',
+                                SBUS='SBUS')
 
     def __init__(self, connector, channels=4):
         Instrument.__init__(self, connector, False)
@@ -472,7 +476,7 @@ class Oscilloscope(Instrument):
         # Stop capture and clear trigger event register
         self._connector.write(":STOP")
         self._connector.query(":TER?")
-        #self._connector.write(":SING")
+        # self._connector.write(":SING")
 
         t = 0
 
@@ -519,7 +523,6 @@ class Oscilloscope(Instrument):
         self._connector.write(":WAV:SOUR {}{}".format(source, channel if channel >= 0 else ''))
 
         waveform_data = self._connector.query_raw(":WAV:DATA?")
-        
 
         if waveform_data[0] != '#':
             return []
@@ -575,6 +578,8 @@ class Oscilloscope(Instrument):
         return self.process_waveform(data)
 
     def get_waveform_auto(self, source, channel=-1):
+        data = []
+
         for v in self._VOLTAGE_STEPS:
             self.set_channel_scale(channel, v)
             data = self.get_waveform(source, channel)
@@ -626,7 +631,6 @@ class Oscilloscope(Instrument):
                 data = self.get_waveform_raw(self.WAVEFORM_SOURCE.CHANNEL, ch)
                 raw_data = [x[1] for x in data]
 
-                #if 0 in raw_data or 1 in raw_data or 255 in raw_data:
                 if any((n in raw_data) for n in (0, 1, 255)):
                     # Over threshold, if previous data exists then return it, else change ranges
                     if type(return_data[i]) == list:
@@ -649,7 +653,7 @@ class Oscilloscope(Instrument):
                     if v[n] == 0 or loop > 0:
                         flags[i] = False
                     else:
-                        # If the maximum of the data is less than the next step down then we can step down to increase resolution
+                        # If maximum in data is less than next step down then step down to increase resolution
                         f = max((abs(x) for x in raw_data)) - 128 + 2
                         f *= self._VOLTAGE_STEPS[v[n]] / self._VOLTAGE_STEPS[v[n] - 1]
 
@@ -661,7 +665,6 @@ class Oscilloscope(Instrument):
             loop += 1
 
         return return_data
-
 
 
 class PowerSupply(Instrument):
@@ -691,7 +694,8 @@ class PowerSupply(Instrument):
 
 
 class SignalGenerator(Instrument):
-    PULSEMOD_SOURCE = util.enum(INT_PULSE='INT', INT_SQUARE='INT', INT_10M='INT1', INT_40M='INT2', EXT_FRONT='EXT1', EXT_BACK='EXT2')
+    PULSEMOD_SOURCE = util.enum(INT_PULSE='INT', INT_SQUARE='INT', INT_10M='INT1', INT_40M='INT2', EXT_FRONT='EXT1',
+                                EXT_BACK='EXT2')
 
     def set_output(self, enabled):
         self._connector.write(":OUTP:STAT {}".format(self._cast_bool(enabled)))
@@ -706,7 +710,7 @@ class SignalGenerator(Instrument):
     def set_pulse(self, enabled):
         self._connector.write(":PULM:STAT ".format(self._cast_bool(enabled)))
 
-    def set_pulse_source(self, source, pulse=True):
+    def set_pulse_source(self, source):
         self._connector.write(":PULM:SOUR {}".format(source))
 
         if source == self.PULSEMOD_SOURCE.INT_PULSE:

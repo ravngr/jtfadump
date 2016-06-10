@@ -113,7 +113,9 @@ class PulseData(DataCapture):
                 self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
                 self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
                 self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
-                self._scope.set_trigger_edge_level(self._scope_trig_level, polarity=self._scope.TRIGGER_POLARITY.POSITIVE if self._scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
+                self._scope.set_trigger_edge_level(self._scope_trig_level,
+                                                   polarity=self._scope.TRIGGER_POLARITY.POSITIVE if
+                                                   self._scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
 
                 # Channels
                 for ch in [self._scope_ch_in, self._scope_ch_out]:
@@ -121,8 +123,10 @@ class PulseData(DataCapture):
                     self._scope.set_channel_atten(ch, 1)
                     self._scope.set_channel_coupling(ch, self._scope.CHANNEL_COUPLING.DC)
 
-                self._scope.set_channel_impedance(self._scope_ch_in, self._scope.CHANNEL_IMPEDANCE.FIFTY if self._scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
-                self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if self._scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+                self._scope.set_channel_impedance(self._scope_ch_in, self._scope.CHANNEL_IMPEDANCE.FIFTY if
+                                                  self._scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+                self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if
+                                                  self._scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
 
                 # Channel labels
                 self._scope.set_channel_label_visible(True)
@@ -301,7 +305,8 @@ class FrequencyData(DataCapture):
         DataCapture.__init__(self, args, cfg, result_dir)
 
         counter_address = cfg.get(self._CFG_SECTION, 'counter_address')
-        counter_impedance = equipment.FrequencyCounter.INPUT_IMPEDANCE.FIFTY if cfg.getboolean(self._CFG_SECTION, 'counter_50r') else equipment.FrequencyCounter.INPUT_IMPEDANCE.HIGH
+        counter_impedance = equipment.FrequencyCounter.INPUT_IMPEDANCE.FIFTY if \
+            cfg.getboolean(self._CFG_SECTION, 'counter_50r') else equipment.FrequencyCounter.INPUT_IMPEDANCE.HIGH
         counter_period = cfg.getfloat(self._CFG_SECTION, 'counter_period')
         self._counter_average = cfg.getint(self._CFG_SECTION, 'counter_average')
         self._counter_delay = cfg.getfloat(self._CFG_SECTION, 'counter_delay')

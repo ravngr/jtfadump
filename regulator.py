@@ -134,7 +134,6 @@ class TemperatureRegulator(Regulator):
 
                 self._logger.exception("Failed to read temperature ({} attempt{} remaining)".format(attempts, '' if attempts == 1 else 's'), exc_info=True)
 
-
     def _set_voltage(self, voltage):
         if self._enabled:
             self._power_supply.set_voltage(voltage)

@@ -29,7 +29,8 @@ class TemperatureLogger:
 
         r = self._port.read(self._PAYLOAD_SIZE)
         # Unpack data into platform appropriate format
-        t = (struct.unpack('>h', r[self._PAYLOAD_DATA_OFFSET_LOW+channel:self._PAYLOAD_DATA_OFFSET_HIGH+channel])[0]) / 10.0
+        t = (struct.unpack('>h',
+                           r[self._PAYLOAD_DATA_OFFSET_LOW+channel:self._PAYLOAD_DATA_OFFSET_HIGH+channel])[0]) / 10.0
 
         self._logger.debug(u"{} READ ch{}: {}°C".format(self._port.name, channel, t))
 

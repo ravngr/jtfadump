@@ -108,7 +108,7 @@ def main():
         # Save log in results folder
         log_dir = result_dir
 
-    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % (start_time_str))
+    log_file_path = os.path.join(os.path.realpath(log_dir), 'log_%s.txt' % start_time_str)
 
     os.mkdir(result_dir)
 
@@ -156,7 +156,6 @@ def main():
     root_logger.info("Logging path: {}".format(log_file_path))
     root_logger.info("Result directory: {}".format(result_dir))
 
-
     # Dump configuration to log
     root_logger.debug("--- BEGIN CONFIGURATION LISTING ---")
 
@@ -167,7 +166,6 @@ def main():
             root_logger.debug("{}: {}".format(item[0], item[1]))
 
     root_logger.debug("--- END CONFIGURATION LISTING ---")
-
 
     # Setup experiment
     try:
@@ -199,7 +197,7 @@ def main():
                     run_post_processor = post_processor_class(run_exp, run_data_capture, cfg)
                     run_data_capture.add_post_processor(run_post_processor)
                 else:
-                    root_logger.warning("{} does not support data capture {}".format(post_class))
+                    root_logger.warning("{} does not support data capture {}".format(post_class, data_capture_class))
     except:
         root_logger.exception('Exception while loading post processor class', exc_info=True)
         run_exp.stop()
@@ -207,9 +205,10 @@ def main():
 
     # Make sure log file is written before beginning
     log_handle_file.flush()
-
     
     # Setup notification if required
+    notify = None;
+
     if args.notify:
         notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
         try:
@@ -217,15 +216,14 @@ def main():
                                 title='jtfadump Started')
         except requests.exceptions.ConnectionError:
             root_logger.warning('Failed to send Pushover start notification')
-    
 
     # Run the experiment
-    #try:
-    #    with open(_LOOP_STATE_FILE, 'r') as f:
-    #        run_exp.set_remaining_loops(pickle.load(f))
-    #        root_logger.info("Loaded existing loop counter from file")
-    #except:
-    #    root_logger.info("No existing state")
+    # try:
+    #     with open(_LOOP_STATE_FILE, 'r') as f:
+    #         run_exp.set_remaining_loops(pickle.load(f))
+    #         root_logger.info("Loaded existing loop counter from file")
+    # except:
+    #     root_logger.info("No existing state")
 
     loop = 0
     loop_runtime = []
@@ -274,7 +272,7 @@ def main():
 
         root_logger.info('Experiment loop exited normally')
         
-        if args.notify:
+        if notify:
             notify.send_message("Experiment stopped normally after {} loop{}".format(loop, '' if loop == 1 else 's'),
                                 title='jtfadump Stopped')
     except (KeyboardInterrupt, SystemExit):
@@ -282,16 +280,16 @@ def main():
     except:
         root_logger.exception('Error while running experiment', exc_info=True)
 
-        if args.notify:
+        if notify:
             notify.send_message("Exception occurred during experiment! Traceback:\n{}".format(traceback.format_exc()),
-                title='jtfadump Exception')
+                                title='jtfadump Exception')
     finally:
         try:
             run_exp.stop()
         except:
             root_logger.exception('Error while stopping experiment', exc_info=True)
 
-            if args.notify:
+            if notify:
                 notify.send_message("Exception occurred while stopping experiment! Traceback:\n{}".format(
                     traceback.format_exc()), title='jtfadump Exception')
 

@@ -16,7 +16,7 @@ def enum(**enums):
 
 # From http://stackoverflow.com/questions/12826723/possible-to-extract-the-git-repo-revision-hash-via-python-code
 def get_git_hash():
-    proc = Popen(['git', 'rev-parse','HEAD'], stdout=PIPE)
+    proc = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE)
     (proc_out, _) = proc.communicate()
     return proc_out.strip()
 
@@ -90,7 +90,7 @@ _SNP_PARAMETER_TYPE = enum(S='S', Y='Y', Z='Z', G='G', H='H')
 
 def read_snp(snp_path):
     with open(snp_path, 'r') as f:
-        snp_text = f.readlines();
+        snp_text = f.readlines()
 
     # Replace punctuation
     snp_text[:] = [re.sub('[\t,]', ' ', line.upper().strip()) for line in snp_text]
@@ -188,7 +188,7 @@ def read_snp(snp_path):
         step = 1
 
     for n in range(0, len(snp_text), step):
-        # Concaternate multiple lines if necessary
+        # Concatenate multiple lines if necessary
         if ports > 2:
             data_line = ' '.join(snp_text[n:n + step])
         else:
@@ -198,7 +198,8 @@ def read_snp(snp_path):
 
         # 2 port data must be rearranged
         if ports == 2:
-            data_fields = [data_fields[0], data_fields[1], data_fields[2], data_fields[5], data_fields[6], data_fields[3], data_fields[4], data_fields[7], data_fields[8]];
+            data_fields = [data_fields[0], data_fields[1], data_fields[2], data_fields[5], data_fields[6],
+                           data_fields[3], data_fields[4], data_fields[7], data_fields[8]];
 
         net_data = [[]]
         
@@ -223,4 +224,4 @@ def read_snp(snp_path):
 
         data.append(((float(data_fields[0]) * unit_multiplier), net_data))
 
-    return (parameter_type, unit_r, data)
+    return parameter_type, unit_r, data,

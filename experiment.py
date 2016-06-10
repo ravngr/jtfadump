@@ -100,9 +100,11 @@ class TemperatureExperiment(Experiment):
 
         supply_address = self._cfg.get(self._CFG_SECTION, 'supply_address')
         supply_bus_id = self._cfg.getint(self._CFG_SECTION, 'supply_bus_id')
-        supply_limit = pid.Limit(self._cfg.getfloat(self._CFG_SECTION, 'voltage_min'), self._cfg.getfloat(self._CFG_SECTION, 'voltage_max'))
+        supply_limit = pid.Limit(self._cfg.getfloat(self._CFG_SECTION, 'voltage_min'), self._cfg.getfloat(
+            self._CFG_SECTION, 'voltage_max'))
 
-        pid_param = pid.ControllerParameters(self._cfg.getfloat(self._CFG_SECTION, 'pid_p'), self._cfg.getfloat(self._CFG_SECTION, 'pid_i'), self._cfg.getfloat(self._CFG_SECTION, 'pid_d'))
+        pid_param = pid.ControllerParameters(self._cfg.getfloat(self._CFG_SECTION, 'pid_p'), self._cfg.getfloat(
+            self._CFG_SECTION, 'pid_i'), self._cfg.getfloat(self._CFG_SECTION, 'pid_d'))
         pid_period = self._cfg.getfloat(self._CFG_SECTION, 'pid_period')
 
         # Reload experiment state
@@ -124,7 +126,8 @@ class TemperatureExperiment(Experiment):
 
         self._logger_ambient_channel = logger_ambient_channel
         self._logger_sensor_channel = logger_sensor_channel
-        self._temperature_regulator = regulator.TemperatureRegulator(logger, logger_sensor_channel, supply, pid_param, pid_period, supply_limit)
+        self._temperature_regulator = regulator.TemperatureRegulator(logger, logger_sensor_channel, supply, pid_param,
+                                                                     pid_period, supply_limit)
 
     def step(self):
         self._temperature_n -= 1
@@ -165,7 +168,8 @@ class TemperatureExperiment(Experiment):
 
         # Update for next step
         if increment:
-            if (self._temperature >= self._temperature_max and self._temperature_step > 0) or (self._temperature <= self._temperature_min and self._temperature_step < 0):
+            if (self._temperature >= self._temperature_max and self._temperature_step > 0) \
+                    or (self._temperature <= self._temperature_min and self._temperature_step < 0):
                 self._temperature_step = -self._temperature_step
 
             self._temperature += self._temperature_step
