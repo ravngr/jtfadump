@@ -11,10 +11,17 @@ import util
 
 
 class DataCapture:
+    _ROOT_CFG_SECTION = 'data'
+
     def __init__(self, args, cfg, result_dir):
         self._args = args
         self._cfg = cfg
         self._result_dir = result_dir
+
+        if self._cfg.has_section(self._ROOT_CFG_SECTION):
+            self._save_summary = self._cfg.getboolean(self._ROOT_CFG_SECTION, 'save_summary')
+        else:
+            self._save_summary = False
 
         self._logger = logging.getLogger(__name__)
 
@@ -33,6 +40,9 @@ class DataCapture:
     def _save_state(self, capture_id, run_exp):
         experiment_state = run_exp.get_state(capture_id)
         experiment_state['data_capture'] = self.__class__.__name__
+
+        if not self._save_summary:
+            return experiment_state
 
         txt_path = os.path.join(self._result_dir, DataCapture._gen_file_name('cap', 'txt', capture_id))
 
@@ -336,6 +346,38 @@ class FrequencyData(DataCapture):
             experiment_state['result_counter_frequency'].append(self._counter.get_frequency())
 
         self._save_mat('freq', capture_id, experiment_state)
+
+
+class FrequencyDataLegacy(FrequencyData):
+    _DELIMITER = ','
+
+    def __init__(self, args, cfg, result_dir):
+        FrequencyData.__init__(args, cfg, result_dir)
+
+        # Create .freq file
+        self._data_path = self._gen_file_name('legacy', 'freq', '0')
+
+        self._logger.info("Result file: {}".format(self._data_path))
+
+    def save(self, capture_id, run_exp):
+        # Get capture time
+        date_str = time.strftime('%d/%m/%Y %H:%M:%S')
+
+        # Get frequency from counter
+        self._counter.trigger()
+        self._counter.wait_measurement()
+
+        result_frequency = []
+
+        for run in range(self._counter_average):
+            time.sleep(self._counter_delay)
+            result_frequency.append(self._counter.get_frequency())
+
+        # Take mean of measured values
+        result_frequency = sum(result_frequency) / len(result_frequency)
+
+        with open(self._data_path, 'a') as f:
+            f.write(self._DELIMITER.join([date_str, result_frequency, result_frequency]))
 
 
 class MKSData(DataCapture):
