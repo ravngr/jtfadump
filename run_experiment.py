@@ -207,7 +207,7 @@ def main():
     log_handle_file.flush()
     
     # Setup notification if required
-    notify = None;
+    notify = None
 
     if args.notify:
         notify = pushover.Client(user_key=cfg.get('pushover', 'user_key'), api_token=cfg.get('pushover', 'api_key'))
