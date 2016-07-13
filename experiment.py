@@ -129,7 +129,12 @@ class TemperatureExperiment(Experiment):
                                                                      pid_period, supply_limit)
 
         if self._cfg.has_option(self._CFG_SECTION, 'supply_enable'):
-            self._temperature_regulator.set_enabled(self._cfg.getboolean(self._CFG_SECTION, 'supply_enable'))
+            en = self._cfg.getboolean(self._CFG_SECTION, 'supply_enable')
+            
+            if not en:
+                self._logger.warning('Supply control disabled!')
+            
+            self._temperature_regulator.set_enabled(en)
 
     def step(self):
         self._temperature_n -= 1

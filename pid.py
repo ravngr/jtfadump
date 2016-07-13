@@ -41,7 +41,7 @@ class Controller:
         self.set_parameters(pid_param)
 
         # Setup internal variables
-        out_func(initial)
+        # out_func(initial)
         self._output_value = self._limit.clamp(initial)
         self._integral = self._limit.clamp(initial)
         self._input_prev = in_func()

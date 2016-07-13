@@ -64,6 +64,20 @@ class ScopeSignalProcessor(PostProcessor):
 
         return data
 
+        
+class FrequencyCountProcessor(PostProcessor):
+    def __init__(self, run_experiment, run_data_capture, cfg):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
+
+    @staticmethod
+    def get_supported_data_capture():
+        return data_capture.FrequencyData,
+
+    def process(self, data):
+        self._logger.info("Frequency: {} Hz".format(data['result_counter_frequency'][0]))
+
+        return data
+        
 
 class MKSMonitorPostProcessor(PostProcessor):
     _CFG_SECTION = 'mks'
