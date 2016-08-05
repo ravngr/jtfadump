@@ -360,18 +360,22 @@ class FrequencyDataLegacy(FrequencyData):
         self._logger.info("Result file: {}".format(self._data_path))
 
     def save(self, capture_id, run_exp):
+        fail_count = 0
+
+        while True:
+            result_frequency = []
+
+            try:
+                for run in range(self._counter_average):
+                    time.sleep(self._counter_delay)
+                    result_frequency.append(self._counter.get_frequency())
+
+                break
+            except:
+                self._logger.exception('Exception during capture')
+
         # Get capture time
         date_str = time.strftime('%d/%m/%Y %H:%M:%S')
-
-        # Get frequency from counter
-        # self._counter.trigger()
-        # self._counter.wait_measurement()
-
-        result_frequency = []
-        
-        for run in range(self._counter_average):
-            time.sleep(self._counter_delay)
-            result_frequency.append(self._counter.get_frequency())
         
         for post in self._post_processing:
             data = post.process({'result_counter_frequency': result_frequency})
