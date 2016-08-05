@@ -25,6 +25,12 @@ class PostProcessor:
     def process(self, data):
         raise NotImplementedError()
 
+    def log(self, level, msg):
+        self._logger.log(level, msg)
+
+        if self._notify is not None:
+            self._notify.send_message(msg, title='Post-Processor Message')
+
 
 class ScopeSignalProcessor(PostProcessor):
     def __init__(self, run_experiment, run_data_capture, cfg, notify):
@@ -74,6 +80,8 @@ class FrequencyCountProcessor(PostProcessor):
         self._prev_f = None
         self._rolling_f = []
 
+        self._threshold = 1e6
+
     @staticmethod
     def get_supported_data_capture():
         return (data_capture.FrequencyData, data_capture.FrequencyDataLegacy,)
@@ -99,13 +107,10 @@ class FrequencyCountProcessor(PostProcessor):
         stda = numpy.std(a)
         stdd = numpy.std(da)
         
-        if abs(df) > 1e6:
+        if abs(df) > self._threshold:
             msg = "Possible mode hop: {} Hz -> {} Hz (delta: {:.1f} Hz)".format(self._prev_f, f, df)
-        
-            self._logger.warn(msg)
-            
-            if self._notify is not None:
-                self._notify.send_message(msg, title='jtfadump Mode Hop Detector')
+
+            self.log(logging.WARNING, msg)
         
         self._prev_f = f
         
@@ -115,6 +120,83 @@ class FrequencyCountProcessor(PostProcessor):
         self._logger.info("Frequency dmean: {:.1f} Hz".format(meandelta))
         self._logger.info("Frequency std:   {:.1f} Hz".format(stda))
         self._logger.info("Frequency dstd:  {:.1f} Hz".format(stdd))
+
+        return data
+
+
+class FrequencyDisplayProcessor(PostProcessor):
+    _THRESHOLD = 300
+
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
+
+        self._freq_fig, self._freq_axes = plt.subplots(1, sharex=True)
+
+        self._freq_axes[0].set_title('Counter Frequency')
+
+        self._freq_axes[1].set_xlabel('Time (s)')
+        self._freq_axes[0].set_ylabel('Frequency (MHz)')
+
+        self._freq_axes_line = [None, None]
+
+        self._freq_x = []
+        self._freq_y = []
+
+        plt.show(block=False)
+
+    @staticmethod
+    def get_supported_data_capture():
+        return data_capture.FrequencyData, data_capture.FrequencyDataLegacy,
+
+    def process(self, data):
+        t = data['capture_timestamp']
+        f = data['result_counter_frequency'][0]
+
+        self._freq_x.append(t)
+        self._freq_y.append(f)
+
+        # Only store the last _THRESHOLD seconds for plotting
+        while self._freq_x[0] < (t - self._THRESHOLD):
+            self._freq_x.pop(0)
+            self._freq_y.pop(0)
+
+        # Generate plot sets
+        x = [n - self._freq_x[-1] for n in self._freq_x]
+        y = [n / 1e6 for n in self._freq_y]
+
+        # Update plots
+        if self._freq_axes_line[0] is None:
+            self._freq_axes_line[0], = self._freq_axes[0].plot(x, y)
+        else:
+            self._freq_axes_line[0].set_xdata(x)
+            self._freq_axes_line[0].set_ydata(y)
+
+        self._freq_fig.canvas.draw()
+        plt.pause(0.001)
+
+        return data
+
+
+class BlackMagicDetector(PostProcessor):
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
+
+        self._prev_timestamp = None
+
+    @staticmethod
+    def get_supported_data_capture():
+        return data_capture.FrequencyData, data_capture.FrequencyDataLegacy, data_capture.PulseData, \
+               data_capture.VNAData
+
+    def process(self, data):
+        timestamp = data['capture_timestamp']
+
+        if self._prev_timestamp is not None and timestamp <= self._prev_timestamp:
+            dt = timestamp - self._prev_timestamp
+
+            self.log(logging.WARNING, "Negative time shift since last capture dt: {:.3f} sec".format(dt))
+
+        self._prev_timestamp = timestamp
 
         return data
         
