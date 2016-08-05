@@ -352,10 +352,10 @@ class FrequencyDataLegacy(FrequencyData):
     _DELIMITER = ','
 
     def __init__(self, args, cfg, result_dir):
-        FrequencyData.__init__(args, cfg, result_dir)
+        FrequencyData.__init__(self, args, cfg, result_dir)
 
         # Create .freq file
-        self._data_path = self._gen_file_name('legacy', 'freq', '0')
+        self._data_path = os.path.join(self._result_dir, self._gen_file_name('legacy', 'freq', '0'))
 
         self._logger.info("Result file: {}".format(self._data_path))
 
@@ -364,20 +364,25 @@ class FrequencyDataLegacy(FrequencyData):
         date_str = time.strftime('%d/%m/%Y %H:%M:%S')
 
         # Get frequency from counter
-        self._counter.trigger()
-        self._counter.wait_measurement()
+        # self._counter.trigger()
+        # self._counter.wait_measurement()
 
         result_frequency = []
-
+        
         for run in range(self._counter_average):
             time.sleep(self._counter_delay)
             result_frequency.append(self._counter.get_frequency())
+        
+        for post in self._post_processing:
+            data = post.process({'result_counter_frequency': result_frequency})
 
         # Take mean of measured values
         result_frequency = sum(result_frequency) / len(result_frequency)
+        
+        freq_str = "{:.2f}".format(result_frequency)
 
         with open(self._data_path, 'a') as f:
-            f.write(self._DELIMITER.join([date_str, result_frequency, result_frequency]))
+            f.write(self._DELIMITER.join([date_str, freq_str, freq_str]) + '\n')
 
 
 class MKSData(DataCapture):

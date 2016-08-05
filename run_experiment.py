@@ -185,27 +185,7 @@ def main():
         root_logger.exception('Exception while loading data capture class', exc_info=True)
         run_exp.stop()
         return
-
-    # Add post-processors
-    try:
-        if args.post is not None:
-            for post_class in args.post:
-                root_logger.info("Loading post-processor: {}".format(post_class))
-                post_processor_class = util.class_from_str("post_processor.{}".format(post_class), __name__)
-
-                if data_capture_class in post_processor_class.get_supported_data_capture():
-                    run_post_processor = post_processor_class(run_exp, run_data_capture, cfg)
-                    run_data_capture.add_post_processor(run_post_processor)
-                else:
-                    root_logger.warning("{} does not support data capture {}".format(post_class, data_capture_class))
-    except:
-        root_logger.exception('Exception while loading post processor class', exc_info=True)
-        run_exp.stop()
-        return
-
-    # Make sure log file is written before beginning
-    log_handle_file.flush()
-    
+        
     # Setup notification if required
     notify = None
 
@@ -216,6 +196,26 @@ def main():
                                 title='jtfadump Started')
         except requests.exceptions.ConnectionError:
             root_logger.warning('Failed to send Pushover start notification')
+
+    # Add post-processors
+    try:
+        if args.post is not None:
+            for post_class in args.post:
+                root_logger.info("Loading post-processor: {}".format(post_class))
+                post_processor_class = util.class_from_str("post_processor.{}".format(post_class), __name__)
+
+                if data_capture_class in post_processor_class.get_supported_data_capture():
+                    run_post_processor = post_processor_class(run_exp, run_data_capture, cfg, notify)
+                    run_data_capture.add_post_processor(run_post_processor)
+                else:
+                    root_logger.warning("{} does not support data capture {}".format(post_class, data_capture_class))
+    except:
+        root_logger.exception('Exception while loading post processor class', exc_info=True)
+        run_exp.stop()
+        return
+
+    # Make sure log file is written before beginning
+    log_handle_file.flush()
 
     # Run the experiment
     # try:

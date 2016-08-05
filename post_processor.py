@@ -3,16 +3,18 @@
 import logging
 
 import matplotlib.pyplot as plt
+import numpy
 
 import data_capture
 import mks
 
 
 class PostProcessor:
-    def __init__(self, run_experiment, run_data_capture, cfg):
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
         self._run_experiment = run_experiment
         self._run_data_capture = run_data_capture
         self._cfg = cfg
+        self._notify = notify
 
         self._logger = logging.getLogger(__name__)
 
@@ -25,8 +27,8 @@ class PostProcessor:
 
 
 class ScopeSignalProcessor(PostProcessor):
-    def __init__(self, run_experiment, run_data_capture, cfg):
-        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
 
         # Setup axes
         # plt.ion()
@@ -66,15 +68,53 @@ class ScopeSignalProcessor(PostProcessor):
 
         
 class FrequencyCountProcessor(PostProcessor):
-    def __init__(self, run_experiment, run_data_capture, cfg):
-        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
+        
+        self._prev_f = None
+        self._rolling_f = []
 
     @staticmethod
     def get_supported_data_capture():
-        return data_capture.FrequencyData,
+        return (data_capture.FrequencyData, data_capture.FrequencyDataLegacy,)
 
     def process(self, data):
-        self._logger.info("Frequency: {} Hz".format(data['result_counter_frequency'][0]))
+        f = data['result_counter_frequency'][0]
+        
+        if self._prev_f is not None:
+            df = f - self._prev_f
+        else:
+            df = 0
+        
+        self._rolling_f.append(f)
+        
+        while len(self._rolling_f) > 32:
+            self._rolling_f.pop(0)
+        
+        a = numpy.array(self._rolling_f)
+        
+        meana = numpy.mean(a)
+        da = numpy.diff(a)
+        meandelta = numpy.mean(da)
+        stda = numpy.std(a)
+        stdd = numpy.std(da)
+        
+        if abs(df) > 1e6:
+            msg = "Possible mode hop: {} Hz -> {} Hz (delta: {:.1f} Hz)".format(self._prev_f, f, df)
+        
+            self._logger.warn(msg)
+            
+            if self._notify is not None:
+                self._notify.send_message(msg, title='jtfadump Mode Hop Detector')
+        
+        self._prev_f = f
+        
+        self._logger.info("Frequency:       {:.1f} Hz".format(f))
+        self._logger.info("Frequency delta: {:.1f} Hz".format(df))
+        self._logger.info("Frequency mean:  {:.1f} Hz".format(meana))
+        self._logger.info("Frequency dmean: {:.1f} Hz".format(meandelta))
+        self._logger.info("Frequency std:   {:.1f} Hz".format(stda))
+        self._logger.info("Frequency dstd:  {:.1f} Hz".format(stdd))
 
         return data
         
@@ -82,8 +122,8 @@ class FrequencyCountProcessor(PostProcessor):
 class MKSMonitorPostProcessor(PostProcessor):
     _CFG_SECTION = 'mks'
 
-    def __init__(self, run_experiment, run_data_capture, cfg):
-        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg)
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
 
         mks_port = self._cfg.get(self._CFG_SECTION, 'port')
         self._expiry = self._cfg.getfloat(self._CFG_SECTION, 'expiry')
