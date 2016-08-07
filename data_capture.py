@@ -377,8 +377,12 @@ class FrequencyDataLegacy(FrequencyData):
         # Get capture time
         date_str = time.strftime('%d/%m/%Y %H:%M:%S')
         
+        # Get state for post-processing
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
+        experiment_state['result_counter_frequency'] = result_frequency
+        
         for post in self._post_processing:
-            data = post.process({'result_counter_frequency': result_frequency})
+            post.process(experiment_state)
 
         # Take mean of measured values
         result_frequency = sum(result_frequency) / len(result_frequency)

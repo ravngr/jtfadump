@@ -125,22 +125,22 @@ class FrequencyCountProcessor(PostProcessor):
 
 
 class FrequencyDisplayProcessor(PostProcessor):
-    _THRESHOLD = 300
+    _THRESHOLD = [60, 300, 3600]
 
     def __init__(self, run_experiment, run_data_capture, cfg, notify):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
 
-        self._freq_fig, self._freq_axes = plt.subplots(1, sharex=True)
-
+        self._freq_fig, self._freq_axes = plt.subplots(len(self._THRESHOLD))
+        
         self._freq_axes[0].set_title('Counter Frequency')
 
-        self._freq_axes[1].set_xlabel('Time (s)')
-        self._freq_axes[0].set_ylabel('Frequency (MHz)')
+        for a in self._freq_axes:
+            a.set_xlabel('Time (s)')
+            a.set_ylabel('Frequency (Hz)')
 
-        self._freq_axes_line = [None, None]
+        self._freq_axes_line = [None] * len(self._THRESHOLD)
 
-        self._freq_x = []
-        self._freq_y = []
+        self._plot_values = []
 
         plt.show(block=False)
 
@@ -150,26 +150,32 @@ class FrequencyDisplayProcessor(PostProcessor):
 
     def process(self, data):
         t = data['capture_timestamp']
+        t = data['capture_timestamp']
         f = data['result_counter_frequency'][0]
-
-        self._freq_x.append(t)
-        self._freq_y.append(f)
+        
+        self._plot_values.append((t, f,))
 
         # Only store the last _THRESHOLD seconds for plotting
-        while self._freq_x[0] < (t - self._THRESHOLD):
-            self._freq_x.pop(0)
-            self._freq_y.pop(0)
+        while self._plot_values[0][0] < (t - max(self._THRESHOLD)):
+            self._plot_values.pop(0)
 
         # Generate plot sets
-        x = [n - self._freq_x[-1] for n in self._freq_x]
-        y = [n / 1e6 for n in self._freq_y]
-
-        # Update plots
-        if self._freq_axes_line[0] is None:
-            self._freq_axes_line[0], = self._freq_axes[0].plot(x, y)
-        else:
-            self._freq_axes_line[0].set_xdata(x)
-            self._freq_axes_line[0].set_ydata(y)
+        for n in range(len(self._THRESHOLD)):
+            plot_values = [v for v in self._plot_values if (v[0] >= (t - self._THRESHOLD[n]))]
+            
+            x = [v[0] - plot_values[-1][0] for v in plot_values]
+            y = [v[1] for v in plot_values]
+            
+            if self._freq_axes_line[n] is None:
+                self._freq_axes_line[n], = self._freq_axes[n].plot(x, y)
+            else:
+                ymin = min(y)
+                ymax = max(y)
+                yspan = ymax - ymin
+                self._freq_axes[n].set_xlim(min(x), max(x))
+                self._freq_axes[n].set_ylim(ymax + 0.05 * yspan, ymin - 0.05 * yspan)
+                self._freq_axes_line[n].set_xdata(x)
+                self._freq_axes_line[n].set_ydata(y)
 
         self._freq_fig.canvas.draw()
         plt.pause(0.001)
