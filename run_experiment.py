@@ -262,8 +262,8 @@ def main():
 
             loop += 1
 
-            with open(_LOOP_STATE_FILE, 'w') as f:
-                pickle.dump(run_exp.get_remaining_loops(), f)
+            # with open(_LOOP_STATE_FILE, 'w') as f:
+            #    pickle.dump(run_exp.get_remaining_loops(), f)
 
         try:
             os.unlink(_LOOP_STATE_FILE)

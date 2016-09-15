@@ -125,7 +125,7 @@ class FrequencyCountProcessor(PostProcessor):
 
 
 class FrequencyDisplayProcessor(PostProcessor):
-    _THRESHOLD = [60, 300, 3600]
+    _THRESHOLD = [60, 60 * 60, 6 * 60 * 60]
 
     def __init__(self, run_experiment, run_data_capture, cfg, notify):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
@@ -169,13 +169,14 @@ class FrequencyDisplayProcessor(PostProcessor):
             if self._freq_axes_line[n] is None:
                 self._freq_axes_line[n], = self._freq_axes[n].plot(x, y)
             else:
-                ymin = min(y)
-                ymax = max(y)
-                yspan = ymax - ymin
-                self._freq_axes[n].set_xlim(min(x), max(x))
-                self._freq_axes[n].set_ylim(ymax + 0.05 * yspan, ymin - 0.05 * yspan)
                 self._freq_axes_line[n].set_xdata(x)
                 self._freq_axes_line[n].set_ydata(y)
+            
+            ymin = min(y)
+            ymax = max(y)
+            yspan = ymax - ymin
+            self._freq_axes[n].set_xlim(min(x), max(x))
+            self._freq_axes[n].set_ylim(ymin - 0.05 * yspan, ymax + 0.05 * yspan)
 
         self._freq_fig.canvas.draw()
         plt.pause(0.001)

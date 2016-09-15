@@ -223,7 +223,7 @@ class TimeExperiment(Experiment):
     def __init__(self, args, cfg, result_dir):
         Experiment.__init__(self, args, cfg, result_dir)
 
-        self._step_time = self._cfg.getint(self._CFG_SECTION, 'step_time')
+        self._step_time = self._cfg.getfloat(self._CFG_SECTION, 'step_time')
 
     def step(self):
         # Just sleep until next time increment
