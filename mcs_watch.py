@@ -1,9 +1,11 @@
 from __future__ import print_function
 
+import os.path
 import serial
 import time
 
 
+_FILE_PATH = '.'
 _FILE_PREFIX = 'mcs'
 _FILE_EXTENSION = 'log'
 
@@ -26,7 +28,9 @@ def main():
 
     print('OK!')
 
-    log_name = "{}_{}.{}".format(_FILE_PREFIX, time.strftime('%Y%m%d%H%M%S'), _FILE_EXTENSION)
+    log_name = os.path.abspath(os.path.join((_FILE_PATH, "{}_{}.{}".format(_FILE_PREFIX, time.strftime('%Y%m%d%H%M%S'),
+                                                                           _FILE_EXTENSION))))
+    
     line_buffer = ''
 
     print("Logging to file: {}".format(log_name))
