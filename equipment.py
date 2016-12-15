@@ -47,6 +47,8 @@ class VISAConnector(InstrumentConnector):
             self._instrument.write_termination = term_chars
 
         self._instrument.clear()
+        
+        self._instrument.timeout = 10000
 
         self._logger.info("{} Connected".format(self.get_address()))
 
@@ -380,6 +382,14 @@ class Oscilloscope(Instrument):
 
         if count > 0:
             self._connector.write(":ACQ:COUN {}".format(count))
+    
+    # Segmented memory functions
+    def set_segment_count(self, count=1):
+        if count > 1:
+            self._connector.write(":ACQ:SEGM:COUN {}".format(count))
+            self._connector.write(':ACQ:MODE SEGM')
+        else:
+            self._connector.write(':ACQ:MODE RTIM')
 
     # Channel configuration
     def set_channel_atten(self, channel, attenuation):
@@ -473,9 +483,13 @@ class Oscilloscope(Instrument):
         self._connector.write(":TRIG:GLIT:LEV {}".format(level))
 
     def trigger_single(self, timeout=0.0, interval=0.1):
+        # self._connector.write(":ACQ:SRAT:ANAL 500E+6")
+        # self._connector.write(":ACQ:POIN:ANAL 200000")
+    
         # Stop capture and clear trigger event register
         self._connector.write(":STOP")
         self._connector.query(":TER?")
+        self._connector.write(":DIG")
         # self._connector.write(":SING")
 
         t = 0
@@ -508,8 +522,9 @@ class Oscilloscope(Instrument):
         self._connector.write(":WAV:FORM {}".format(waveform_format))
         self._connector.write(":WAV:BYT LSBF")
         self._connector.write(":WAV:UNS 1")
-        self._connector.write(":WAV:POIN:MODE MAX")
-        self._connector.write(":WAV:POIN MAX")
+        # self._connector.write(":WAV:POIN:MODE MAX")
+        self._connector.write(":WAV:POIN 200000")
+        # self._connector.write(":WAV:POIN 10000")
 
     def setup_waveform_smart(self):
         self.setup_waveform(self.WAVEFORM_FORMAT.BYTE)
@@ -518,36 +533,63 @@ class Oscilloscope(Instrument):
         self._smart_ready = True
 
     # Waveform capture
-    def get_waveform_raw(self, source, channel=-1):
+    def get_waveform_raw(self, source, channel=-1, segment=False):
         # Select data source
         self._connector.write(":WAV:SOUR {}{}".format(source, channel if channel >= 0 else ''))
 
-        waveform_data = self._connector.query_raw(":WAV:DATA?")
+        # Get segment count
+        if segment:
+            wave_count = int(self._connector.query(":WAV:SEGM:COUN?"));
+        else:
+            wave_count = 1
+        
+        wave_data = []
+        
+        for segment in range(0, wave_count):
+            # Select segment
+            self._connector.write(":ACQ:SEGM:IND {}".format(segment + 1))
+            
+            waveform_data = self._connector.query_raw(":WAV:DATA?")
 
-        if waveform_data[0] != '#':
-            return []
+            if waveform_data[0] != '#':
+                return []
 
-        wave_start = 2 + int(waveform_data[1])
-        wave_size = int(waveform_data[2:wave_start])
+            wave_start = 2 + int(waveform_data[1])
+            wave_size = int(waveform_data[2:wave_start])
 
-        if self._waveform_format == self.WAVEFORM_FORMAT.WORD:
-            wave_size /= 2
-
-        data = []
-
-        for x in range(0, wave_size):
             if self._waveform_format == self.WAVEFORM_FORMAT.WORD:
-                i = wave_start + x * 2
-                y = struct.unpack('>H', waveform_data[i:i + 2])[0]
-            else:
-                i = wave_start + x
-                y = struct.unpack('>B', waveform_data[i])[0]
+                wave_size /= 2
 
-            data.append((x, y))
+            data = []
 
-        return data
+            for x in range(0, wave_size):
+                if self._waveform_format == self.WAVEFORM_FORMAT.WORD:
+                    i = wave_start + x * 2
+                    y = struct.unpack('<H', waveform_data[i:i + 2])[0]
+                else:
+                    i = wave_start + x
+                    y = struct.unpack('>B', waveform_data[i])[0]
 
-    def process_waveform(self, data):
+                data.append((x, y))
+            
+            wave_data.append(data)
+
+        if segment:
+            return wave_data
+        else:
+            return wave_data[0]
+
+    def process_waveform(self, data, segment=False):
+        if segment:
+            # Select segment
+            self._connector.write(':ACQ:SEGM:IND 1')
+            
+            wave_count = int(self._connector.query(":WAV:SEGM:COUN?"));
+        else:
+            wave_count = 1
+            
+            data = [data];
+    
         header = self._connector.query(":WAV:PRE?").split(',')
 
         if len(header) != 10:
@@ -560,22 +602,33 @@ class Oscilloscope(Instrument):
         v_origin = float(header[8])
         v_ref = int(header[9])
 
-        return_data = []
+        segment_data = []
+        
+        for segment in range(0, wave_count):
+            return_data = []
 
-        for d in data:
-            t = (d[0] - t_ref) * t_step + t_origin
-            v = (d[1] - v_ref) * v_step + v_origin
+            for d in data[segment]:
+                t = (d[0] - t_ref) * t_step + t_origin
+                v = (d[1] - v_ref) * v_step + v_origin
 
-            return_data.append((d[0], d[1], t, v))
+                return_data.append((d[0], d[1], t, v))
+            
+            segment_data.append(return_data)
 
-        return return_data
+        if segment:
+            return segment_data
+        else:
+            return segment_data[0]
 
-    def get_waveform(self, source, channel, trigger=True, timeout=_TIMEOUT_DEFAULT):
+    def get_waveform(self, channel, trigger=True, timeout=_TIMEOUT_DEFAULT, source=None, segment=False):
+        if source is None:
+            source = self.WAVEFORM_SOURCE.CHANNEL
+    
         if trigger:
             self.trigger_single(timeout)
 
-        data = self.get_waveform_raw(source, channel)
-        return self.process_waveform(data)
+        data = self.get_waveform_raw(source, channel, segment=segment)
+        return self.process_waveform(data, segment=segment)
 
     def get_waveform_auto(self, source, channel=-1):
         data = []

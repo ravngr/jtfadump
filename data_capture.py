@@ -72,7 +72,7 @@ class NullData(DataCapture):
 
         # Save results to .mat file
         self._save_mat('null_mat', capture_id, experiment_state)
-
+        
 
 class PulseData(DataCapture):
     _CFG_SECTION = 'pulse'
@@ -85,11 +85,22 @@ class PulseData(DataCapture):
 
         self._scope_ch_in = self._cfg.getint(self._CFG_SECTION, 'scope_ch_in')
         self._scope_ch_in_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_in_50r')
+        self._scope_ch_in_scale = self._cfg.getfloat(self._CFG_SECTION, 'scope_ch_in_scale')
+        self._scope_ch_in_offset = self._cfg.getfloat(self._CFG_SECTION, 'scope_ch_in_offset')
         self._scope_ch_out = self._cfg.getint(self._CFG_SECTION, 'scope_ch_out')
         self._scope_ch_out_50r = self._cfg.getboolean(self._CFG_SECTION, 'scope_ch_out_50r')
+        self._scope_ch_out_scale = self._cfg.getfloat(self._CFG_SECTION, 'scope_ch_out_scale')
+        self._scope_ch_out_offset = self._cfg.getfloat(self._CFG_SECTION, 'scope_ch_out_offset')
+        self._scope_ch_out_hr_scale = self._cfg.getfloat(self._CFG_SECTION, 'scope_ch_out_hr_scale')
         self._scope_time_div = self._cfg.getfloat(self._CFG_SECTION, 'scope_time_div')
         self._scope_trig_level = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_level')
         self._scope_trig_pol = self._cfg.getboolean(self._CFG_SECTION, 'scope_trig_pol')
+        self._scope_trig_ext = self._cfg.getboolean(self._CFG_SECTION, 'scope_trig_ext')
+        self._scope_trig_holdoff = self._cfg.getfloat(self._CFG_SECTION, 'scope_trig_holdoff')
+        self._scope_segment = self._cfg.getint(self._CFG_SECTION, 'scope_segment')
+        self._scope_align = self._cfg.getboolean(self._CFG_SECTION, 'scope_align')
+        
+        self._scope_acq_avg = self._cfg.getfloat(self._CFG_SECTION, 'scope_acq_avg')
 
         self._scope_avg = self._cfg.getint(self._CFG_SECTION, 'scope_avg')
 
@@ -117,12 +128,18 @@ class PulseData(DataCapture):
 
                 # Time scale
                 self._scope.set_time_scale(self._scope_time_div)
-                self._scope.set_time_reference(self._scope.TIME_REFERENCE.LEFT)
+                
+                if self._scope_align:
+                    self._scope.set_time_reference(self._scope.TIME_REFERENCE.LEFT)
 
                 # Triggering
                 self._scope.set_trigger_sweep(self._scope.TRIGGER_SWEEP.NORMAL)
                 self._scope.set_trigger_mode(self._scope.TRIGGER_MODE.EDGE)
-                self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
+                
+                if self._scope_trig_ext:
+                    self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.EXTERNAL)
+                else:
+                    self._scope.set_trigger_edge_source(self._scope.TRIGGER_SOURCE.CHANNEL, self._scope_ch_in)
                 self._scope.set_trigger_edge_level(self._scope_trig_level,
                                                    polarity=self._scope.TRIGGER_POLARITY.POSITIVE if
                                                    self._scope_trig_pol else self._scope.TRIGGER_POLARITY.NEGATIVE)
@@ -137,6 +154,11 @@ class PulseData(DataCapture):
                                                   self._scope_ch_in_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
                 self._scope.set_channel_impedance(self._scope_ch_out, self._scope.CHANNEL_IMPEDANCE.FIFTY if
                                                   self._scope_ch_out_50r else self._scope.CHANNEL_IMPEDANCE.HIGH)
+                
+                self._scope.set_channel_scale(self._scope_ch_in, self._scope_ch_in_scale)
+                self._scope.set_channel_scale(self._scope_ch_out, self._scope_ch_out_scale)
+                self._scope.set_channel_offset(self._scope_ch_in, self._scope_ch_in_offset)
+                self._scope.set_channel_offset(self._scope_ch_out, self._scope_ch_out_offset)
 
                 # Channel labels
                 self._scope.set_channel_label_visible(True)
@@ -144,7 +166,14 @@ class PulseData(DataCapture):
                 self._scope.set_channel_label(self._scope_ch_out, 'OUT')
 
                 # Setup fast waveform dumping
-                self._scope.setup_waveform_smart()
+                # self._scope.setup_waveform_smart()
+                
+                # Averaging
+                if self._scope_acq_avg > 0:
+                    self._scope.set_aq_mode(self._scope.ACQUISITION_MODE.AVERAGE, self._scope_acq_avg)
+                    
+                # self._scope._connector.write(":ACQ:SRAT:ANAL 500E+6")
+                self._scope.setup_waveform(self._scope.WAVEFORM_FORMAT.BYTE)
                 
                 flag = True
                 break
@@ -171,21 +200,33 @@ class PulseData(DataCapture):
                 capture_state = run_exp.get_state(capture_id)
                 result_key = run_exp.get_result_key(capture_state)
 
-                scope_capture = self._scope.get_waveform_smart([self._scope_ch_in, self._scope_ch_out])
-                scope_capture_time = [x[2] for x in scope_capture[0]]
-                scope_capture_in = [x[3] for x in scope_capture[0]]
-                scope_capture_out = [x[3] for x in scope_capture[1]]
+                # scope_capture = self._scope.get_waveform_smart([self._scope_ch_in, self._scope_ch_out])
+                # self._scope.set_channel_scale(self._scope_ch_out, self._scope_ch_out_scale)
+                scope_capture = self._scope.get_waveform(self._scope_ch_in)
+                scope_capture_time = [x[2] for x in scope_capture]
+                scope_capture_in = [x[3] for x in scope_capture]
+                scope_capture = self._scope.get_waveform(self._scope_ch_out, trigger=False)
+                scope_capture_out = [x[3] for x in scope_capture]
+                
+                #self._scope.set_channel_scale(self._scope_ch_out, self._scope_ch_out_hr_scale)
+                #scope_capture = self._scope.get_waveform(self._scope_ch_out)
+                #scope_capture_out_hr = [x[3] for x in scope_capture]
+                
+                self._logger.info("Received {} samples".format(len(scope_capture_time)))
 
                 if 'result_scope_time' not in experiment_state:
                     experiment_state['result_scope_time'] = scope_capture_time
 
                 if self._save_raw:
                     scope_result_raw_key.append(result_key)
+                    #scope_result_raw.append((scope_capture_in, scope_capture_out, scope_capture_out_hr))
                     scope_result_raw.append((scope_capture_in, scope_capture_out))
 
                 if result_key in scope_result:
+                    #scope_result[result_key].append((scope_capture_in, scope_capture_out, scope_capture_out_hr))
                     scope_result[result_key].append((scope_capture_in, scope_capture_out))
                 else:
+                    #scope_result[result_key] = [(scope_capture_in, scope_capture_out, scope_capture_out_hr)]
                     scope_result[result_key] = [(scope_capture_in, scope_capture_out)]
             except:
                 fail_count += 1
@@ -206,6 +247,7 @@ class PulseData(DataCapture):
         # Combine results based off sensor temperature
         experiment_in_result = []
         experiment_out_result = []
+        experiment_out_hr_result = []
 
         result_key_name = run_exp.get_result_key_name()
 
@@ -222,6 +264,9 @@ class PulseData(DataCapture):
 
             scope_capture_out_array = numpy.array([x[1] for x in scope_capture_set])
             experiment_out_result.append(numpy.mean(scope_capture_out_array, axis=0).tolist())
+            
+            #scope_capture_out_hr_array = numpy.array([x[2] for x in scope_capture_set])
+            #experiment_out_hr_result.append(numpy.mean(scope_capture_out_hr_array, axis=0).tolist())
 
             experiment_state['result_avg_length'].append(numpy.size(scope_capture_in_array, axis=0))
 
@@ -235,10 +280,47 @@ class PulseData(DataCapture):
 
         experiment_state['result_scope_in'] = experiment_in_result
         experiment_state['result_scope_out'] = experiment_out_result
+        #experiment_state['result_scope_out_hr'] = experiment_out_hr_result
+        
+        self._logger.debug('Processing complete')
 
         # Save results to .mat file
         self._save_mat('scope_mat', capture_id, experiment_state)
+        self._logger.debug('Save complete')
 
+        
+class SweepData(PulseData):
+    def __init__(self, args, cfg, result_dir):
+        PulseData.__init__(self, args, cfg, result_dir)
+        
+    def _scope_init(self):
+        PulseData._scope_init(self)
+        
+        self._scope.set_aq_mode(self._scope.ACQUISITION_MODE.HIGHRES)
+        self._scope.set_trigger_holdoff(self._scope_trig_holdoff)
+        self._scope.set_segment_count(self._scope_segment)
+
+    def save(self, capture_id, run_exp):
+        experiment_state = DataCapture._save_state(self, capture_id, run_exp)
+
+        capture_state = run_exp.get_state(capture_id)
+        
+        scope_capture = self._scope.get_waveform(self._scope_ch_in, segment=True)
+        scope_capture_time = [[x[2] for x in y] for y in scope_capture]
+        scope_capture_in = [[x[3] for x in y] for y in scope_capture]
+        scope_capture = self._scope.get_waveform(self._scope_ch_out, trigger=False, segment=True)
+        scope_capture_out = [[x[3] for x in y] for y in scope_capture]
+        
+        experiment_state['result_scope_time'] = scope_capture_time
+        experiment_state['result_scope_in'] = scope_capture_in
+        experiment_state['result_scope_out'] = scope_capture_out
+        
+        self._logger.debug('Processing complete')
+
+        # Save results to .mat file
+        self._save_mat('scope_mat', capture_id, experiment_state)
+        self._logger.debug('Save complete')
+        
 
 class VNAData(DataCapture):
     _CFG_SECTION = 'vna'
