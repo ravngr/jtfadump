@@ -73,6 +73,60 @@ class ScopeSignalProcessor(PostProcessor):
         return data
 
         
+class DeltaScopeSignalProcessor(PostProcessor):
+    def __init__(self, run_experiment, run_data_capture, cfg, notify):
+        PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
+
+        # Setup axes
+        # plt.ion()
+
+        self._scope_fig, self._scope_axes = plt.subplots(2, sharex=True)
+
+        self._scope_axes[0].set_title('Signals')
+
+        self._scope_axes[1].set_xlabel('Time (us)')
+        self._scope_axes[0].set_ylabel('Input Signal (mV)')
+        self._scope_axes[1].set_ylabel('Output Signal (mV)')
+
+        self._scope_axes_line = [None, None]
+
+        plt.show(block=False)
+        
+        self._prev = None;
+
+    @staticmethod
+    def get_supported_data_capture():
+        return data_capture.PulseData,
+
+    def process(self, data):
+        time = [x * 1000000 for x in data['result_scope_time']]
+        scope = ([x * 1000 for x in data['result_scope_in'][0]], [x * 1000 for x in data['result_scope_out'][0]])
+        
+        if self._prev is not None:
+            delta_scope = [[scope[x][y] - self._prev[x][y] for y in range(0, len(scope[x]))] for x in range(0, 2)]
+        
+            self._scope_axes[0].set_title("Signals {}".format(data['capture_id']))
+
+            for line in [0, 1]:
+                line_data = delta_scope[line]
+            
+                if self._scope_axes_line[line] is None:
+                    self._scope_axes_line[line], = self._scope_axes[line].plot(time, line_data)
+                else:
+                    self._scope_axes_line[line].set_ydata(line_data)
+                
+                self._scope_axes[line].set_xlim(min(time), max(time))
+                ymax = max([abs(x) for x in line_data])
+                self._scope_axes[line].set_ylim(-1.05 * ymax, 1.05 * ymax)
+
+            self._scope_fig.canvas.draw()
+            plt.pause(0.001)
+        
+        self._prev = scope
+
+        return data
+
+        
 class FrequencyCountProcessor(PostProcessor):
     def __init__(self, run_experiment, run_data_capture, cfg, notify):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
@@ -125,12 +179,12 @@ class FrequencyCountProcessor(PostProcessor):
 
 
 class FrequencyDisplayProcessor(PostProcessor):
-    _THRESHOLD = [60, 60 * 60, 6 * 60 * 60]
+    _THRESHOLD = [60, 60 * 60, 24 * 60 * 60]
 
     def __init__(self, run_experiment, run_data_capture, cfg, notify):
         PostProcessor.__init__(self, run_experiment, run_data_capture, cfg, notify)
 
-        self._freq_fig, self._freq_axes = plt.subplots(len(self._THRESHOLD))
+        self._freq_fig, self._freq_axes = plt.subplots(len(self._THRESHOLD) + 1)
         
         self._freq_axes[0].set_title('Counter Frequency')
 
@@ -138,7 +192,7 @@ class FrequencyDisplayProcessor(PostProcessor):
             a.set_xlabel('Time (s)')
             a.set_ylabel('Frequency (Hz)')
 
-        self._freq_axes_line = [None] * len(self._THRESHOLD)
+        self._freq_axes_line = [None] * (len(self._THRESHOLD) + 1)
 
         self._plot_values = []
 
@@ -160,8 +214,8 @@ class FrequencyDisplayProcessor(PostProcessor):
             self._plot_values.pop(0)
 
         # Generate plot sets
-        for n in range(len(self._THRESHOLD)):
-            plot_values = [v for v in self._plot_values if (v[0] >= (t - self._THRESHOLD[n]))]
+        for n in range(1, len(self._THRESHOLD) + 1):
+            plot_values = [v for v in self._plot_values if (v[0] >= (t - self._THRESHOLD[n - 1]))]
             
             x = [v[0] - plot_values[-1][0] for v in plot_values]
             y = [v[1] for v in plot_values]
@@ -177,6 +231,27 @@ class FrequencyDisplayProcessor(PostProcessor):
             yspan = ymax - ymin
             self._freq_axes[n].set_xlim(min(x), max(x))
             self._freq_axes[n].set_ylim(ymin - 0.05 * yspan, ymax + 0.05 * yspan)
+        
+        # First plot is for delta frequency over shortest
+        plot_values = [v for v in self._plot_values if (v[0] >= (t - self._THRESHOLD[0]))]
+        
+        if len(plot_values) > 2:
+            x = [v[0] - plot_values[-1][0] for v in plot_values]
+            y = [v[1] for v in plot_values]
+            x = x[:-1]
+            y = [y[n] - y[n - 1] for n in range(1, len(y))]
+            
+            if self._freq_axes_line[0] is None:
+                self._freq_axes_line[0], = self._freq_axes[0].plot(x, y)
+            else:
+                self._freq_axes_line[0].set_xdata(x)
+                self._freq_axes_line[0].set_ydata(y)
+            
+            ymin = min(y)
+            ymax = max(y)
+            yspan = ymax - ymin
+            self._freq_axes[0].set_xlim(min(x), max(x))
+            self._freq_axes[0].set_ylim(ymin - 0.05 * yspan, ymax + 0.05 * yspan)
 
         self._freq_fig.canvas.draw()
         plt.pause(0.001)
